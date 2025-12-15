@@ -84,6 +84,44 @@ function fetchViaBackground(payload) {
   });
 }
 
+function getPrismLanguage(path) {
+  const ext = path.split(".").pop().toLowerCase();
+
+  const map = {
+    js: "javascript",
+    jsx: "javascript",
+    ts: "typescript",
+    tsx: "typescript",
+    json: "json",
+    py: "python",
+    go: "go",
+    rs: "rust",
+    html: "markup",
+    css: "css",
+    md: "markdown",
+    sh: "bash",
+    yml: "yaml",
+    yaml: "yaml",
+  };
+
+  return map[ext] || "none";
+}
+
+function clampCode(code, maxLines = 30) {
+  const lines = code.split("\n");
+  const sliced = lines.slice(0, maxLines).join("\n");
+  return {
+    code: sliced,
+    truncated: lines.length > maxLines,
+  };
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 async function handleHover(e, link) {
   const href = link.href;
 
@@ -112,19 +150,24 @@ async function handleHover(e, link) {
 `;
 
     cache.set(href, html);
+    if (!popup) return;
     popup.innerHTML = html;
     return;
   }
 
   const { owner, repo } = getRepoInfo();
-  const path = new URL(href).pathname.split("/").slice(4).join("/");
+  const parts = new URL(href).pathname.split("/").filter(Boolean);
+  const branch = parts[3];
+  const path = parts.slice(4).join("/");
 
   const res = await fetchViaBackground({
     type: "FETCH_FILE",
     owner,
     repo,
+    branch,
     path,
   });
+  if (!popup) return;
 
   if (res?.error === "NO_TOKEN") {
     popup.innerHTML = `
@@ -141,20 +184,26 @@ async function handleHover(e, link) {
     return;
   }
 
+  const { code, truncated } = clampCode(res.content, 30);
+  const language = getPrismLanguage(path);
+
   const html = `
-  <pre class="
-    w-full h-full
-    p-3
-    overflow-hidden
-    font-mono text-[11px] leading-relaxed
-    whitespace-pre-wrap
-  ">
-${highlightCode(res.content)}
-  </pre>
+  <div class="w-full h-full overflow-hidden">
+    <pre class="language-${language} text-[11px] leading-relaxed p-3">
+<code class="language-${language}">${escapeHtml(code)}</code>
+    </pre>
+    ${
+      truncated
+        ? `<div class="px-3 pb-2 text-[10px] opacity-60">… truncated</div>`
+        : ""
+    }
+  </div>
 `;
 
   cache.set(href, html);
+  if (!popup) return;
   popup.innerHTML = html;
+  Prism.highlightAllUnder(popup);
 }
 
 // mouse over
