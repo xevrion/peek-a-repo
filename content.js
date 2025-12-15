@@ -24,7 +24,7 @@ function getRepoInfo() {
   const parts = location.pathname.split("/").filter(Boolean);
   return {
     owner: parts[0],
-    repo: parts[1]
+    repo: parts[1],
   };
 }
 
@@ -54,7 +54,7 @@ function highlightCode(code) {
 }
 
 function fetchViaBackground(payload) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     chrome.runtime.sendMessage(payload, resolve);
   });
 }
@@ -85,7 +85,7 @@ async function handleHover(e, link) {
     type: "FETCH_FILE",
     owner,
     repo,
-    path
+    path,
   });
 
   if (res?.error === "NO_TOKEN") {
@@ -103,14 +103,9 @@ async function handleHover(e, link) {
   popup.innerHTML = html;
 }
 
-/* =========================
-   HOVER DETECTION (FIXED)
-   ========================= */
-
-document.addEventListener("mouseover", e => {
-  const link = e.target.closest(
-    'a[href*="/blob/"], a[href*="/tree/"]'
-  );
+// mouse over
+document.addEventListener("mouseover", (e) => {
+  const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
   if (!link || link === lastTarget) return;
 
   lastTarget = link;
@@ -123,21 +118,16 @@ document.addEventListener("mouseover", e => {
   }, HOVER_DELAY);
 });
 
-document.addEventListener("mousemove", e => {
+document.addEventListener("mousemove", (e) => {
   if (popup) positionPopup(e);
 });
 
-/* =========================
-   MOUSEOUT (FIXED)
-   ========================= */
-
-document.addEventListener("mouseout", e => {
+// mouse out
+document.addEventListener("mouseout", (e) => {
   if (
     popup &&
     !popup.contains(e.relatedTarget) &&
-    !e.relatedTarget?.closest?.(
-      'a[href*="/blob/"], a[href*="/tree/"]'
-    )
+    !e.relatedTarget?.closest?.('a[href*="/blob/"], a[href*="/tree/"]')
   ) {
     clearTimeout(hoverTimer);
     destroyPopup();

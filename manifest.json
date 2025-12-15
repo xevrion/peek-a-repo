@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Peek-a-Repo",
-  "description": "Instant hover previews for GitHub repository files and folders.",
+  "description": "Hover to preview files and folders on github.",
   "version": "1.0.0",
 
   "icons": {
@@ -11,9 +11,7 @@
     "128": "icons/icon128.png"
   },
 
-  "permissions": [
-    "storage"
-  ],
+  "permissions": ["storage"],
 
   "host_permissions": [
     "https://github.com/*",

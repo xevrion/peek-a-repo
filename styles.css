@@ -10,7 +10,7 @@
   backdrop-filter: blur(12px);
   color: #fff;
   font-size: 12px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
 }
 
 .peek-loading,
