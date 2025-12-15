@@ -49,3 +49,63 @@ async function fetchFile({ owner, repo, branch, path }) {
     content: json?.data?.repository?.object?.text || null,
   };
 }
+
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type == "FETCH_FILE"){
+    fetchFile(msg).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type == "FETCH_FOLDER"){
+    fetchFolder(msg).then(sendResponse);
+    return true;
+  }
+});
+
+
+async function fetchFolder({ owner, repo, branch, path }) {
+  const { githubToken } = await chrome.storage.sync.get("githubToken");
+  if(!githubToken) return {error: "NO_TOKEN"};
+
+  const query = `
+    query ($owner: String!, $repo: String!, $expression: String!) {
+      repository(owner: $owner, name: $repo) {
+        object(expression: $expression) {
+          ... on Tree {
+            entries {
+              name
+              type
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const res = await fetch(GITHUB_API, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${githubToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query,
+      variables: {
+        owner,
+        repo,
+        expression: `${branch}:${path}`,
+      },
+    }),
+  });
+
+  const json = await res.json();
+
+  if (json.errors) {
+    return { error: json.errors[0].message };
+  }
+
+  return {
+    entries: json?.data?.repository?.object?.entries || [],
+  };
+}

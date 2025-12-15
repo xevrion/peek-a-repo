@@ -1,16 +1,22 @@
 const HOVER_DELAY = 0;
+const MAX_IMAGE_AREA = 480 * 320;
 const cache = new Map();
 
 let hoverTimer = null;
 let popup = null;
 let lastTarget = null;
 
+const ICONS = {
+  folder:`<svg aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill icon-directory" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`,
+  file:`<svg aria-hidden="true" focusable="false" class="octicon octicon-file color-fg-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path></svg>`,
+};
+
 function createPopup() {
   popup = document.createElement("div");
 
   popup.className = `
     fixed z-[9999]
-    w-[480px] h-[320px]
+    max-w-[90vw] max-h-[90vh]
     p-3
     rounded-xl
     bg-[rgba(20,20,30,0.75)]
@@ -19,7 +25,6 @@ function createPopup() {
     shadow-2xl
     overflow-hidden
     pointer-events-none
-
     opacity-0 scale-[0.98] translate-y-1
     transition-all duration-150 ease-out
   `;
@@ -144,18 +149,96 @@ async function handleHover(e, link) {
 
   if (isImageFile(href)) {
     const raw = buildRawUrl(href);
-    const html = `
-  <div class="w-full h-full flex items-center justify-center">
-    <img
-      src="${raw}"
-      class="max-w-full max-h-full object-contain rounded-lg"
-      loading="lazy"
-    />
-  </div>
-`;
 
-    cache.set(href, html);
+    popup.innerHTML = `
+    <div class="flex items-center justify-center">
+      <img id="peek-img" src="${raw}" class="rounded-lg" />
+      </div>
+    `;
+
+    const img = popup.querySelector("#peek-img");
+
+    img.onload = () => {
+      if (!popup) return;
+
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const area = w * h;
+
+      let scale = 1;
+      if (area > MAX_IMAGE_AREA) {
+        scale = Math.sqrt(MAX_IMAGE_AREA / area);
+      }
+
+      const displayW = Math.round(w * scale);
+      const displayH = Math.round(h * scale);
+
+      img.style.width = `${displayW}px`;
+      img.style.height = `${displayH}px`;
+
+      popup.style.width = `${displayW + 24}px`;
+      popup.style.height = `${displayH + 24}px`;
+
+      cache.set(href, popup.innerHTML);
+    };
+    return;
+  }
+
+  const isFolder = href.includes("/tree/");
+
+  if (isFolder) {
+    const { owner, repo } = getRepoInfo();
+    const parts = new URL(href).pathname.split("/").filter(Boolean);
+    const branch = parts[3];
+    const path = parts.slice(4).join("/");
+  
+    const res = await fetchViaBackground({
+      type: "FETCH_FOLDER",
+      owner,
+      repo,
+      branch,
+      path,
+    });
+  
     if (!popup) return;
+  
+    if (res?.error === "NO_TOKEN") {
+      popup.innerHTML = `
+        <div class="p-3 opacity-80">
+          Please set your GitHub token in extension options.
+        </div>
+      `;
+      return;
+    }
+  
+    if (!res?.entries?.length) {
+      popup.innerHTML = `
+        <div class="p-3 opacity-60">
+          Empty folder
+        </div>
+      `;
+      return;
+    }
+  
+    const rows = res.entries
+      .slice(0, 25)
+      .map(entry => `
+        <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10">
+          <span class="opacity-80">
+            ${entry.type === "tree" ? ICONS.folder : ICONS.file}
+          </span>
+          <span class="truncate">${entry.name}</span>
+        </div>
+      `)
+      .join("");
+  
+    const html = `
+      <div class="flex flex-col gap-1 max-h-[320px] overflow-auto">
+        ${rows}
+      </div>
+    `;
+  
+    cache.set(href, html);
     popup.innerHTML = html;
     return;
   }
