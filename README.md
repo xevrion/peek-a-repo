@@ -58,7 +58,7 @@ Worth reading the [Wikipedia article](https://wikimediafoundation.org/news/2018/
 - **Hover previews for code files**
 
   - Fetches raw code using GitHub GraphQL API
-  - Syntax highlighting using Prism.js
+  - Syntax highlighting using Prism.js (supports JS,TS,HTML,CSS,JSON,MD,Rust,Go,Python as of now, will add more soon, im lazy)
 
 - **Hover previews for folders** (still doesnt work for all the folders, needs fixing)
 
