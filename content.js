@@ -1,4 +1,5 @@
 const HOVER_DELAY = 0;
+const MAX_IMAGE_AREA = 480 * 320;
 const cache = new Map();
 
 let hoverTimer = null;
@@ -10,7 +11,7 @@ function createPopup() {
 
   popup.className = `
     fixed z-[9999]
-    w-[480px] h-[320px]
+    max-w-[90vw] max-h-[90vh]
     p-3
     rounded-xl
     bg-[rgba(20,20,30,0.75)]
@@ -19,7 +20,6 @@ function createPopup() {
     shadow-2xl
     overflow-hidden
     pointer-events-none
-
     opacity-0 scale-[0.98] translate-y-1
     transition-all duration-150 ease-out
   `;
@@ -144,19 +144,38 @@ async function handleHover(e, link) {
 
   if (isImageFile(href)) {
     const raw = buildRawUrl(href);
-    const html = `
-  <div class="w-full h-full flex items-center justify-center">
-    <img
-      src="${raw}"
-      class="max-w-full max-h-full object-contain rounded-lg"
-      loading="lazy"
-    />
-  </div>
-`;
 
-    cache.set(href, html);
-    if (!popup) return;
-    popup.innerHTML = html;
+    popup.innerHTML = `
+    <div class="flex items-center justify-center">
+      <img id="peek-img" src="${raw}" class="rounded-lg" />
+      </div>
+    `;
+
+    const img = popup.querySelector("#peek-img");
+
+    img.onload = () => {
+      if (!popup) return;
+
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const area = w * h;
+
+      let scale = 1;
+      if (area > MAX_IMAGE_AREA) {
+        scale = Math.sqrt(MAX_IMAGE_AREA / area);
+      }
+
+      const displayW = Math.round(w * scale);
+      const displayH = Math.round(h * scale);
+
+      img.style.width = `${displayW}px`;
+      img.style.height = `${displayH}px`;
+
+      popup.style.width = `${displayW + 24}px`;
+      popup.style.height = `${displayH + 24}px`;
+
+      cache.set(href, popup.innerHTML);
+    };
     return;
   }
 
