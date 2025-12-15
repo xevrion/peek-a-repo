@@ -1,4 +1,4 @@
-const HOVER_DELAY = 300;
+const HOVER_DELAY = 0;
 const cache = new Map();
 
 let hoverTimer = null;
@@ -19,14 +19,26 @@ function createPopup() {
     shadow-2xl
     overflow-hidden
     pointer-events-none
+
+    opacity-0 scale-[0.98] translate-y-1
+    transition-all duration-150 ease-out
   `;
 
   document.body.appendChild(popup);
 }
 
 function destroyPopup() {
-  if (popup) popup.remove();
+  if (!popup) return;
+
+  popup.classList.remove("opacity-100", "scale-100", "translate-y-0");
+  popup.classList.add("opacity-0", "scale-[0.98]", "translate-y-1");
+
+  const el = popup;
   popup = null;
+
+  setTimeout(() => {
+    el.remove();
+  }, 150); // must match transition duration
 }
 
 function isImageFile(path) {
@@ -156,6 +168,14 @@ document.addEventListener("mouseover", (e) => {
   hoverTimer = setTimeout(() => {
     if (!popup) createPopup();
     positionPopup(e);
+
+    // wait one frame so initial styles apply
+    requestAnimationFrame(() => {
+      if (!popup) return;
+      popup.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+      popup.classList.add("opacity-100", "scale-100", "translate-y-0");
+    });
+
     handleHover(e, link);
   }, HOVER_DELAY);
 });
