@@ -53,26 +53,17 @@ Worth reading the [Wikipedia article](https://wikimediafoundation.org/news/2018/
 - **Hover previews for images**
 
   - Supports any aspect ratio
-  - Images are scaled intelligently based on total resolution
-  - No scrollbars, no empty space
+  - Images are scaled based on total resolution
 
 - **Hover previews for code files**
 
   - Fetches raw code using GitHub GraphQL API
   - Syntax highlighting using Prism.js
-  - Only the top part of the file is shown for speed
 
-- **Hover previews for folders**
+- **Hover previews for folders** (still doesnt work for all the folders, needs fixing)
 
   - Shows a mini GitHub-style file tree
   - Folder and file icons using GitHub’s Octicons (Primer)
-  - Scrollable when there are many files
-
-- **Smooth UI**
-
-  - Glassmorphism-style popup
-  - Subtle open/close animations
-  - Popup follows cursor without being intrusive
 
 - **Smart caching**
 
