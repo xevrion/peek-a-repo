@@ -27,16 +27,16 @@ async function fetchFile({ owner, repo, branch, path }) {
     method: "POST",
     headers: {
       Authorization: `Bearer ${githubToken}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       query,
       variables: {
         owner,
         repo,
-        expression: `${branch}:${path}`
-      }
-    })
+        expression: `${branch}:${path}`,
+      },
+    }),
   });
 
   const json = await res.json();
@@ -46,6 +46,6 @@ async function fetchFile({ owner, repo, branch, path }) {
   }
 
   return {
-    content: json?.data?.repository?.object?.text || null
+    content: json?.data?.repository?.object?.text || null,
   };
 }

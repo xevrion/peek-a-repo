@@ -128,11 +128,11 @@ async function handleHover(e, link) {
   if (cache.has(href)) {
     popup.innerHTML = cache.get(href);
     positionPopup(e);
-  
+
     if (window.Prism) {
       Prism.highlightAllUnder(popup);
     }
-  
+
     return;
   }
 
