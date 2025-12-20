@@ -43,6 +43,16 @@ function createPopup() {
   lockBodyScroll();
   isPopupShown = true;
 
+  popup.addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    if (lastTarget && lastTarget.href) { 
+      window.open(lastTarget.href, "_blank");
+      destroyPopup();
+      lastTarget = null;
+    }
+  });
+
   popup.addEventListener("mouseenter", () => {
     clearTimeout(hoverTimer);
     isPopupShown = true;
