@@ -2,3 +2,13 @@
 
 .kw { color: #7dd3fc; }
 .str { color: #fca5a5; }
+
+/* Hide scrollbar while keeping scroll functionality */
+body.scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+body.scroll-hidden {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
