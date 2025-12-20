@@ -49,8 +49,25 @@ function createPopup() {
   isPopupShown = true;
 
   popup.addEventListener("click", (e) => {
+    e.preventDefault();
     e.stopPropagation();
 
+    // Find the closest folder entry if it exists
+
+    const folderEntry = e.target.closest('.folder-entry');
+
+    if (folderEntry) {
+      const entryUrl = folderEntry.getAttribute('data-entry-url');
+      if (entryUrl) {
+        window.open(entryUrl, '_blank');
+        destroyPopup();
+        currentPreviewUrl = null;
+        return;
+      }
+    }
+
+
+    // fallback if no folder entry was clicked
     if (currentPreviewUrl) {
       window.open(currentPreviewUrl, "_blank");
       destroyPopup();
