@@ -83,9 +83,13 @@ function createPopup() {
   });
 
   popup.addEventListener("mouseleave", () => {
-    unlockBodyScroll();
-    destroyPopup();
-    lastTarget = null;
+    hoverTimer = setTimeout(() => {
+      if (popup && !popup.matches(":hover")) {
+        unlockBodyScroll();
+        destroyPopup();
+        lastTarget = null;
+      }
+    }, 150);
   });
 
   popup.addEventListener(
@@ -307,7 +311,7 @@ async function handleHover(e, link) {
             : `https://github.com/${owner}/${repo}/blob/${branch}/${path ? path + '/' : ''}${entry.name}`;
 
           return `
-            <a href="${entryUrl}" target="_blank" class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 cursor-pointer folder-entry"
+            <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 cursor-pointer folder-entry"
               data-entry-type="${entry.type}"
               data-entry-url="${entryUrl}"
               data-entry-name="${entry.name}"
@@ -317,7 +321,7 @@ async function handleHover(e, link) {
               </span>
 
               <span class="truncate">${entry.name}</span>
-            </a>
+            </div>
           `;
         }
       )
@@ -412,18 +416,47 @@ document.addEventListener("mouseover", (e) => {
 document.addEventListener("mouseout", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
 
+  if (popup && popup.contains(e.target)) return;
+  
+  if (!link || link === lastTarget) return;
+
+  lastTarget = link;
+  clearTimeout(hoverTimer);
+
+  hoverTimer = setTimeout(() => {
+    if (!popup) createPopup();
+    positionPopup(e);
+
+    requestAnimationFrame(() => {
+      if (!popup) return;
+      popup.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+      popup.classList.add("opacity-100", "scale-100", "translate-y-0");
+    });
+
+    handleHover(e, link);
+  }, HOVER_DELAY);
+
+
   // Only destroy if leaving both the link and popup
   if (link && link === lastTarget) {
     const relatedIsPopup = popup && popup.contains(e.relatedTarget);
-    if (!relatedIsPopup) {
+    const relatedIsPopupChild = 
+      popup && e.relatedTarget && 
+      popup.querySelector('*').contains && 
+      Array.from(popup.querySelector('*')).includes(e.relatedTarget);
+
+    if (!relatedIsPopup && !relatedIsPopupChild) {
       hoverTimer = setTimeout(() => {
+
+        if (popup && (popup.matches(":hover") || popup.querySelector(":hover"))) return;
+
         if (!isPopupShown || (popup && !popup.matches(":hover"))) {
           clearTimeout(hoverTimer);
           unlockBodyScroll();
           destroyPopup();
           lastTarget = null;
         }
-      }, 100);
+      }, 150);
     }
   }
 });
