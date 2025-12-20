@@ -370,8 +370,11 @@ async function handleHover(e, link) {
   const language = getPrismLanguage(path);
 
   const html = `
-  <div class="w-full">
-    <pre class="language-${language} text-[11px] leading-relaxed p-3">
+  <div class="w-full cursor-pointer">
+    <pre class="language-${language} text-[11px] hover:bg-white/10! transition-colors duration-300 ease-out group leading-relaxed p-3">
+    <div class="absolute top-0 left-0 w-full h-full max-w-full max-h-full truncate items-center justify-center hidden group-hover:flex">
+      <span class="text-white font-medium text-sm z-50 [-webkit-text-stroke:6px_rgba(0,0,0,0.15)]">Click to open in new tab</span>
+    </div>
 <code class="language-${language}">${escapeHtml(code)}</code>
     </pre>
     ${
