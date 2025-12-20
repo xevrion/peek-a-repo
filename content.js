@@ -37,6 +37,7 @@ function createPopup() {
     opacity-0 scale-[0.98] translate-y-1
     transition-all duration-150 ease-out
     cursor-pointer
+    hover:bg-[rgba(60,60,65,0.85)]
   `;
 
   popup.style.minWidth = "0px";
