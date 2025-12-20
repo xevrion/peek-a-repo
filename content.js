@@ -307,12 +307,16 @@ async function handleHover(e, link) {
             : `https://github.com/${owner}/${repo}/blob/${branch}/${path ? path + '/' : ''}${entry.name}`;
 
           return `
-            <a href="${entryUrl}" target="_blank" class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10">
+            <a href="${entryUrl}" target="_blank" class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 cursor-pointer folder-entry"
+              data-entry-type="${entry.type}"
+              data-entry-url="${entryUrl}"
+              data-entry-name="${entry.name}"
+            >
               <span class="opacity-80">
                 ${entry.type === "tree" ? ICONS.folder : ICONS.file}
               </span>
 
-              <span class="truncate cursor-pointer">${entry.name}</span>
+              <span class="truncate">${entry.name}</span>
             </a>
           `;
         }
