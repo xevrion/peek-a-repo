@@ -36,7 +36,6 @@ function createPopup() {
     overflow-auto
     opacity-0 scale-[0.98] translate-y-1
     transition-all duration-150 ease-out
-    cursor-pointer
   `;
 
   popup.style.minWidth = "0px";
@@ -67,7 +66,10 @@ function createPopup() {
 
 
     // fallback if no folder entry was clicked
-    if (currentPreviewUrl) {
+    if (currentPreviewUrl && 
+
+        // Ensure popup is not a folder list; otherwise disallow clicking
+        popup.querySelectorAll('.folder-entry').length === 0) {
       window.open(currentPreviewUrl, "_blank");
       destroyPopup();
 
