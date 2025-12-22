@@ -7,6 +7,9 @@ let popup = null;
 let lastTarget = null;
 let isPopupShown = false;
 
+// we store the current preview URL here
+let currentPreviewUrl = null;
+
 const ICONS = {
   folder: `<svg aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill icon-directory" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`,
   file: `<svg aria-hidden="true" focusable="false" class="octicon octicon-file color-fg-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path></svg>`,
@@ -43,15 +46,51 @@ function createPopup() {
   lockBodyScroll();
   isPopupShown = true;
 
+  popup.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Find the closest folder entry if it exists
+
+    const folderEntry = e.target.closest('.folder-entry');
+
+    if (folderEntry) {
+      const entryUrl = folderEntry.getAttribute('data-entry-url');
+      if (entryUrl) {
+        window.open(entryUrl, '_blank');
+        destroyPopup();
+        currentPreviewUrl = null;
+        return;
+      }
+    }
+
+
+    // fallback if no folder entry was clicked
+    if (currentPreviewUrl && 
+
+        // Ensure popup is not a folder list; otherwise disallow clicking
+        popup.querySelectorAll('.folder-entry').length === 0) {
+      window.open(currentPreviewUrl, "_blank");
+      destroyPopup();
+
+      // clear out the current preview url
+      currentPreviewUrl = null;
+    }
+  });
+
   popup.addEventListener("mouseenter", () => {
     clearTimeout(hoverTimer);
     isPopupShown = true;
   });
 
   popup.addEventListener("mouseleave", () => {
-    unlockBodyScroll();
-    destroyPopup();
-    lastTarget = null;
+    hoverTimer = setTimeout(() => {
+      if (popup && !popup.matches(":hover")) {
+        unlockBodyScroll();
+        destroyPopup();
+        lastTarget = null;
+      }
+    }, 150);
   });
 
   popup.addEventListener(
@@ -190,6 +229,7 @@ function escapeHtml(text) {
 }
 
 async function handleHover(e, link) {
+  currentPreviewUrl = link.href;
   const href = link.href;
 
   if (cache.has(href)) {
@@ -266,14 +306,25 @@ async function handleHover(e, link) {
     const rows = res.entries
       .slice(0, 25)
       .map(
-        (entry) => `
-        <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10">
-          <span class="opacity-80">
-            ${entry.type === "tree" ? ICONS.folder : ICONS.file}
-          </span>
-          <span class="truncate">${entry.name}</span>
-        </div>
-      `
+        (entry) => {
+          const entryUrl = entry.type === "tree"
+            ? `https://github.com/${owner}/${repo}/tree/${branch}/${path ? path + '/' : ''}${entry.name}`
+            : `https://github.com/${owner}/${repo}/blob/${branch}/${path ? path + '/' : ''}${entry.name}`;
+
+          return `
+            <div class="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/10 cursor-pointer folder-entry"
+              data-entry-type="${entry.type}"
+              data-entry-url="${entryUrl}"
+              data-entry-name="${entry.name}"
+            >
+              <span class="opacity-80">
+                ${entry.type === "tree" ? ICONS.folder : ICONS.file}
+              </span>
+
+              <span class="truncate">${entry.name}</span>
+            </div>
+          `;
+        }
       )
       .join("");
 
@@ -321,8 +372,11 @@ async function handleHover(e, link) {
   const language = getPrismLanguage(path);
 
   const html = `
-  <div class="w-full">
-    <pre class="language-${language} text-[11px] leading-relaxed p-3">
+  <div class="w-full cursor-pointer">
+    <pre class="language-${language} text-[11px] hover:bg-white/10! transition-colors duration-300 ease-out group leading-relaxed p-3">
+    <div class="absolute top-0 left-0 w-full h-full max-w-full max-h-full truncate items-center justify-center hidden group-hover:flex">
+      <span class="text-white font-medium text-sm z-50 [-webkit-text-stroke:6px_rgba(0,0,0,0.15)]">Click to open in new tab</span>
+    </div>
 <code class="language-${language}">${escapeHtml(code)}</code>
     </pre>
     ${
@@ -366,18 +420,47 @@ document.addEventListener("mouseover", (e) => {
 document.addEventListener("mouseout", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
 
+  if (popup && popup.contains(e.target)) return;
+  
+  if (!link || link === lastTarget) return;
+
+  lastTarget = link;
+  clearTimeout(hoverTimer);
+
+  hoverTimer = setTimeout(() => {
+    if (!popup) createPopup();
+    positionPopup(e);
+
+    requestAnimationFrame(() => {
+      if (!popup) return;
+      popup.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+      popup.classList.add("opacity-100", "scale-100", "translate-y-0");
+    });
+
+    handleHover(e, link);
+  }, HOVER_DELAY);
+
+
   // Only destroy if leaving both the link and popup
   if (link && link === lastTarget) {
     const relatedIsPopup = popup && popup.contains(e.relatedTarget);
-    if (!relatedIsPopup) {
+    const relatedIsPopupChild = 
+      popup && e.relatedTarget && 
+      popup.querySelector('*').contains && 
+      Array.from(popup.querySelector('*')).includes(e.relatedTarget);
+
+    if (!relatedIsPopup && !relatedIsPopupChild) {
       hoverTimer = setTimeout(() => {
+
+        if (popup && (popup.matches(":hover") || popup.querySelector(":hover"))) return;
+
         if (!isPopupShown || (popup && !popup.matches(":hover"))) {
           clearTimeout(hoverTimer);
           unlockBodyScroll();
           destroyPopup();
           lastTarget = null;
         }
-      }, 100);
+      }, 150);
     }
   }
 });
