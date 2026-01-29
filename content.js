@@ -1,11 +1,14 @@
 const HOVER_DELAY = 0;
 const MAX_IMAGE_AREA = 480 * 320;
+const POPUP_GAP = 10;
+const MIN_POPUP_WIDTH = 200;
 const cache = new Map();
 
 let hoverTimer = null;
 let popup = null;
 let lastTarget = null;
 let isPopupShown = false;
+let nestedPopups = []; // Array to track all nested popups
 
 const ICONS = {
   folder: `<svg aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill icon-directory" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`,
@@ -48,10 +51,14 @@ function createPopup() {
     isPopupShown = true;
   });
 
-  popup.addEventListener("mouseleave", () => {
-    unlockBodyScroll();
-    destroyPopup();
-    lastTarget = null;
+  popup.addEventListener("mouseleave", (e) => {
+    // Check if mouse is moving to a nested popup
+    const movingToNested = nestedPopups.some(np => np.element.contains(e.relatedTarget));
+    if (!movingToNested) {
+      unlockBodyScroll();
+      destroyPopup();
+      lastTarget = null;
+    }
   });
 
   popup.addEventListener(
@@ -74,9 +81,202 @@ function destroyPopup() {
   popup = null;
   isPopupShown = false;
   unlockBodyScroll();
+  
+  // Destroy all nested popups
+  nestedPopups.forEach(np => {
+    np.element.classList.add("opacity-0", "scale-[0.98]", "translate-y-1");
+    setTimeout(() => np.element.remove(), 150);
+  });
+  nestedPopups = [];
+  
   setTimeout(() => {
     el.remove();
   }, 150); // must match transition duration
+}
+
+function createNestedPopup(level, parentElement) {
+  const nestedPopup = document.createElement("div");
+  const zIndex = 10000 + level;
+  
+  nestedPopup.className = `
+    fixed
+    rounded-xl
+    bg-[rgba(20,20,30,0.75)]
+    backdrop-blur-md
+    text-white text-xs
+    shadow-2xl
+    pointer-events-auto
+    overflow-auto
+    opacity-0 scale-[0.98] translate-y-1
+    transition-all duration-150 ease-out
+  `;
+  
+  nestedPopup.style.zIndex = zIndex;
+  nestedPopup.style.minWidth = "0px";
+  nestedPopup.style.minHeight = "0px";
+  nestedPopup.style.maxWidth = "90vw";
+  
+  document.body.appendChild(nestedPopup);
+  
+  nestedPopup.addEventListener("wheel", (e) => {
+    e.stopPropagation();
+  }, { passive: false });
+  
+  return { element: nestedPopup, level, parentElement };
+}
+
+function destroyNestedPopupsFromLevel(level) {
+  // Remove all popups at this level and beyond
+  const toRemove = nestedPopups.filter(np => np.level >= level);
+  nestedPopups = nestedPopups.filter(np => np.level < level);
+  
+  toRemove.forEach(np => {
+    np.element.classList.add("opacity-0", "scale-[0.98]", "translate-y-1");
+    setTimeout(() => np.element.remove(), 150);
+  });
+}
+
+async function setupNestedFolderHandlers(parentElement, owner, repo, branch, basePath, level) {
+  const folderElements = parentElement.querySelectorAll("[data-type='tree']");
+  
+  folderElements.forEach((folderElement) => {
+    let activeNestedPopup = null;
+    
+    folderElement.addEventListener("mouseenter", async (e) => {
+      const folderName = folderElement.textContent.trim();
+      const folderPath = basePath ? `${basePath}/${folderName}` : folderName;
+      
+      // Calculate available width
+      const rect = folderElement.getBoundingClientRect();
+      const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20; // 20px padding from edge
+      
+      // Only create nested popup if there's enough space
+      if (availableWidth < MIN_POPUP_WIDTH) {
+        return;
+      }
+      
+      // Destroy any popups at this level or deeper
+      destroyNestedPopupsFromLevel(level + 1);
+      
+      // Create new nested popup
+      const nestedPopup = createNestedPopup(level + 1, folderElement);
+      activeNestedPopup = nestedPopup;
+      nestedPopups.push(nestedPopup);
+      
+      nestedPopup.element.innerHTML = `
+        <div class="w-full flex items-center justify-center opacity-80 p-3">
+          Loading…
+        </div>
+      `;
+      
+      // Position the nested popup
+      nestedPopup.element.style.top = `${rect.top}px`;
+      nestedPopup.element.style.left = `${rect.right + POPUP_GAP}px`;
+      nestedPopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
+      
+      // Animate in
+      requestAnimationFrame(() => {
+        if (!nestedPopup.element.parentElement) return;
+        nestedPopup.element.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+        nestedPopup.element.classList.add("opacity-100", "scale-100", "translate-y-0");
+      });
+      
+      // Fetch folder contents
+      const res = await fetchViaBackground({
+        type: "FETCH_FOLDER",
+        owner,
+        repo,
+        branch,
+        path: folderPath,
+      });
+      
+      if (!nestedPopup.element.parentElement) return;
+      
+      if (res?.error === "NO_TOKEN") {
+        nestedPopup.element.innerHTML = `
+          <div class="p-3 opacity-80">
+            Please set your GitHub token in extension options.
+          </div>
+        `;
+        return;
+      }
+      
+      if (!res?.entries?.length) {
+        nestedPopup.element.innerHTML = `
+          <div class="p-3 opacity-60">
+            Empty folder
+          </div>
+        `;
+        return;
+      }
+      
+      // Render folder contents
+      const rows = res.entries
+        .slice(0, 25)
+        .map((entry) => {
+          const isFile = entry.type === "blob";
+          const className = isFile
+            ? "cursor-pointer hover:bg-white/20 transition-colors"
+            : "hover:bg-white/10 cursor-pointer transition-colors";
+          return `
+          <div class="flex items-center gap-2 px-2 py-1 rounded ${className}" data-file="${isFile ? entry.name : ""}" data-type="${entry.type}" data-name="${entry.name}">
+            <span class="opacity-80">
+              ${entry.type === "tree" ? ICONS.folder : ICONS.file}
+            </span>
+            <span class="truncate">${entry.name}</span>
+          </div>
+        `;
+        })
+        .join("");
+      
+      const html = `
+        <div class="flex flex-col gap-1 p-3">
+          ${rows}
+        </div>
+      `;
+      
+      nestedPopup.element.innerHTML = html;
+      
+      // Add click handlers for files in nested popup
+      nestedPopup.element.querySelectorAll("[data-type='blob']").forEach((fileEl) => {
+        fileEl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const fileName = fileEl.getAttribute("data-file");
+          const filePath = `${folderPath}/${fileName}`;
+          const fileUrl = `https://github.com/${owner}/${repo}/blob/${branch}/${filePath}`;
+          window.open(fileUrl, "_blank");
+        });
+      });
+      
+      // Recursively set up handlers for folders in the nested popup
+      setupNestedFolderHandlers(nestedPopup.element, owner, repo, branch, folderPath, level + 1);
+      
+      // Handle mouse leave - only destroy if not moving to a deeper nested popup
+      nestedPopup.element.addEventListener("mouseleave", (e) => {
+        const movingToDeeper = nestedPopups.some(np => 
+          np.level > level + 1 && np.element.contains(e.relatedTarget)
+        );
+        const movingToParent = parentElement.contains(e.relatedTarget) || 
+                               (popup && popup.contains(e.relatedTarget));
+        
+        if (!movingToDeeper && !movingToParent) {
+          destroyNestedPopupsFromLevel(level + 1);
+        }
+      });
+    });
+    
+    // When leaving the folder element, check if we're going to the nested popup
+    folderElement.addEventListener("mouseleave", (e) => {
+      if (activeNestedPopup && !activeNestedPopup.element.contains(e.relatedTarget)) {
+        // Small delay to allow moving to nested popup
+        setTimeout(() => {
+          if (activeNestedPopup && !activeNestedPopup.element.matches(":hover")) {
+            destroyNestedPopupsFromLevel(level + 1);
+          }
+        }, 100);
+      }
+    });
+  });
 }
 
 function isImageFile(path) {
@@ -304,6 +504,9 @@ async function handleHover(e, link) {
         window.open(fileUrl, "_blank");
       });
     });
+    
+    // Add hover handlers for folders
+    setupNestedFolderHandlers(popup, owner, repo, branch, parts.slice(4).join("/"), 0);
     return;
   }
 
