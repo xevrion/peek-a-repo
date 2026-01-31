@@ -259,9 +259,57 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
         fileEl.addEventListener("mouseenter", (e) => {
           const fileName = fileEl.getAttribute("data-file");
           const fileContent = pageData.files[fileName];
+          const filePath = `${folderPath}/${fileName}`;
           
           // Always destroy existing deeper nested popups first
           destroyNestedPopupsFromLevel(level + 2);
+          
+          // Check if it's an image file
+          if (isImageFile(fileName)) {
+            const rect = fileEl.getBoundingClientRect();
+            const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
+            
+            if (availableWidth < MIN_POPUP_WIDTH) {
+              return;
+            }
+            
+            const filePopup = createNestedPopup(level + 2, fileEl);
+            nestedPopups.push(filePopup);
+            
+            const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
+            
+            const previewHtml = `
+              <div class="w-full flex items-center justify-center p-3">
+                <img src="${rawUrl}" class="rounded-lg max-w-full max-h-full object-contain" style="max-height: 300px;" />
+              </div>
+            `;
+            
+            filePopup.element.innerHTML = previewHtml;
+            
+            // Position the file preview popup
+            filePopup.element.style.top = `${rect.top}px`;
+            filePopup.element.style.left = `${rect.right + POPUP_GAP}px`;
+            filePopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
+            
+            // Animate in
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                if (!filePopup.element.parentElement) return;
+                filePopup.element.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+                filePopup.element.classList.add("opacity-100", "scale-100", "translate-y-0");
+              });
+            });
+            
+            // Handle mouse leave from file preview popup
+            filePopup.element.addEventListener("mouseleave", (e) => {
+              const movingToParent = nestedPopup.element.contains(e.relatedTarget);
+              if (!movingToParent) {
+                destroyNestedPopupsFromLevel(level + 2);
+              }
+            });
+            
+            return;
+          }
           
           if (fileContent) {
             // Create preview popup for file
@@ -539,9 +587,57 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
     fileElement.addEventListener("mouseenter", (e) => {
       const fileName = fileElement.getAttribute("data-file");
       const fileContent = pageData.files ? pageData.files[fileName] : null;
+      const filePath = basePath ? `${basePath}/${fileName}` : fileName;
       
       // Always destroy existing nested popups first when entering a new file
       destroyNestedPopupsFromLevel(1);
+      
+      // Check if it's an image file
+      if (isImageFile(fileName)) {
+        const rect = fileElement.getBoundingClientRect();
+        const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
+        
+        if (availableWidth < MIN_POPUP_WIDTH) {
+          return;
+        }
+        
+        const nestedPopup = createNestedPopup(1, fileElement);
+        nestedPopups.push(nestedPopup);
+        
+        const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
+        
+        const previewHtml = `
+          <div class="w-full flex items-center justify-center p-3">
+            <img src="${rawUrl}" class="rounded-lg max-w-full max-h-full object-contain" style="max-height: 300px;" />
+          </div>
+        `;
+        
+        nestedPopup.element.innerHTML = previewHtml;
+        
+        // Position the nested popup
+        nestedPopup.element.style.top = `${rect.top}px`;
+        nestedPopup.element.style.left = `${rect.right + POPUP_GAP}px`;
+        nestedPopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
+        
+        // Animate in
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (!nestedPopup.element.parentElement) return;
+            nestedPopup.element.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+            nestedPopup.element.classList.add("opacity-100", "scale-100", "translate-y-0");
+          });
+        });
+        
+        // Handle mouse leave from nested popup
+        nestedPopup.element.addEventListener("mouseleave", (e) => {
+          const movingToParent = popupElement.contains(e.relatedTarget);
+          if (!movingToParent) {
+            destroyNestedPopupsFromLevel(1);
+          }
+        });
+        
+        return;
+      }
       
       if (fileContent) {
         // Create preview popup for file
@@ -555,7 +651,6 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
         const nestedPopup = createNestedPopup(1, fileElement);
         nestedPopups.push(nestedPopup);
         
-        const filePath = basePath ? `${basePath}/${fileName}` : fileName;
         const { code, truncated } = clampCode(fileContent, 30);
         const language = getPrismLanguage(fileName);
         
