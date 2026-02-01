@@ -17,6 +17,7 @@ let loginNotificationShown = false; // Track if we've shown the login notificati
 const ERROR_MESSAGES = {
   NO_TOKEN: "Please set your GitHub token in extension options.",
   RATE_LIMIT: "API rate limit exceeded. Please wait a moment before trying again.",
+  PRIVATE_REPO_NO_ACCESS: "This is a private repository. Please sign in with private repo access enabled in the extension settings.",
   DEFAULT: "An error occurred. Please try again.",
 };
 

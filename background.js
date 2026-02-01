@@ -137,6 +137,17 @@ async function fetchFile({ owner, repo, branch, path }) {
       if (rateLimitError) {
         return { error: "RATE_LIMIT" };
       }
+      
+      // Check for private repo access errors (NOT_FOUND usually means no permission)
+      const privateRepoError = json.errors.find(e =>
+        e.type === 'NOT_FOUND' ||
+        e.message?.toLowerCase().includes('not found') ||
+        e.message?.toLowerCase().includes('permission')
+      );
+      if (privateRepoError) {
+        return { error: "PRIVATE_REPO_NO_ACCESS" };
+      }
+      
       return { error: json.errors[0].message };
     }
 
@@ -206,6 +217,17 @@ async function fetchPage({ owner, repo, branch, path }) {
       if (rateLimitError) {
         return { error: "RATE_LIMIT" };
       }
+      
+      // Check for private repo access errors
+      const privateRepoError = json.errors.find(e =>
+        e.type === 'NOT_FOUND' ||
+        e.message?.toLowerCase().includes('not found') ||
+        e.message?.toLowerCase().includes('permission')
+      );
+      if (privateRepoError) {
+        return { error: "PRIVATE_REPO_NO_ACCESS" };
+      }
+      
       return { error: json.errors[0].message };
     }
 
