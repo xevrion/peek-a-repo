@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Peek-a-Repo",
-  "description": "Hover to preview files and folders on github.",
-  "version": "1.0.0",
+  "description": "Hover to preview files, folders, and images on GitHub. Fast and efficient with smart caching.",
+  "version": "2.0.0",
 
   "icons": {
     "16": "icons/icon16.png",
