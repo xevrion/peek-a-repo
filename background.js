@@ -1,6 +1,11 @@
 const GITHUB_API = "https://api.github.com/graphql";
 const GITHUB_CLIENT_ID = "Ov23li7jLGhcwdkrnVXS"; // Public client ID for OAuth
 
+// Open options page when extension icon is clicked
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
+});
+
 // Check if user has token on install/update
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
