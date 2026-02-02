@@ -36,6 +36,27 @@ async function checkAndNotifyLogin() {
   }
 }
 
+// Helper function to expand truncated code
+function expandTruncatedCode(containerElement, fullContent, language) {
+  const preElement = containerElement.querySelector('pre');
+  const codeElement = containerElement.querySelector('code');
+  const truncatedMessage = containerElement.querySelector('.truncated-message');
+  
+  if (preElement && codeElement) {
+    codeElement.textContent = fullContent;
+    
+    // Re-apply Prism highlighting
+    if (window.Prism) {
+      Prism.highlightElement(codeElement);
+    }
+    
+    // Remove the truncated message
+    if (truncatedMessage) {
+      truncatedMessage.remove();
+    }
+  }
+}
+
 function showLoginNotification() {
   // Create notification banner
   const notification = document.createElement("div");
@@ -469,15 +490,28 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
             const language = getPrismLanguage(fileName);
             
             const previewHtml = `
-              <div class="w-full">
+              <div class="w-full code-preview-container">
                 <pre class="language-${language} text-[11px] leading-relaxed p-3">
 <code class="language-${language}">${escapeHtml(code)}</code>
                 </pre>
-                ${truncated ? `<div class="px-3 pb-2 text-[10px] opacity-60">… truncated</div>` : ""}
+                ${truncated ? `<div class="truncated-message px-3 pb-2 text-[10px] opacity-60">… truncated <button class="view-more-btn underline hover:opacity-80 cursor-pointer">View more</button></div>` : ""}
               </div>
             `;
             
             filePopup.element.innerHTML = previewHtml;
+            
+            // Add click handler for "View more" button if truncated
+            if (truncated) {
+              const viewMoreBtn = filePopup.element.querySelector('.view-more-btn');
+              if (viewMoreBtn) {
+                viewMoreBtn.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const container = filePopup.element.querySelector('.code-preview-container');
+                  expandTruncatedCode(container, fileContent, language);
+                });
+              }
+            }
             
             // Position the file preview popup
             filePopup.element.style.top = `${rect.top}px`;
@@ -797,15 +831,28 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
         const language = getPrismLanguage(fileName);
         
         const previewHtml = `
-          <div class="w-full">
+          <div class="w-full code-preview-container">
             <pre class="language-${language} text-[11px] leading-relaxed p-3">
 <code class="language-${language}">${escapeHtml(code)}</code>
             </pre>
-            ${truncated ? `<div class="px-3 pb-2 text-[10px] opacity-60">… truncated</div>` : ""}
+            ${truncated ? `<div class="truncated-message px-3 pb-2 text-[10px] opacity-60">… truncated <button class="view-more-btn underline hover:opacity-80 cursor-pointer">View more</button></div>` : ""}
           </div>
         `;
         
         nestedPopup.element.innerHTML = previewHtml;
+        
+        // Add click handler for "View more" button if truncated
+        if (truncated) {
+          const viewMoreBtn = nestedPopup.element.querySelector('.view-more-btn');
+          if (viewMoreBtn) {
+            viewMoreBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const container = nestedPopup.element.querySelector('.code-preview-container');
+              expandTruncatedCode(container, fileContent, language);
+            });
+          }
+        }
         
         // Position the nested popup
         nestedPopup.element.style.top = `${rect.top}px`;
@@ -988,13 +1035,13 @@ async function handleHover(e, link) {
   const language = getPrismLanguage(path);
 
   const html = `
-  <div class="w-full">
+  <div class="w-full code-preview-container">
     <pre class="language-${language} text-[11px] leading-relaxed p-3">
 <code class="language-${language}">${escapeHtml(code)}</code>
     </pre>
     ${
       truncated
-        ? `<div class="px-3 pb-2 text-[10px] opacity-60">… truncated</div>`
+        ? `<div class="truncated-message px-3 pb-2 text-[10px] opacity-60">… truncated <button class="view-more-btn underline hover:opacity-80 cursor-pointer">View more</button></div>`
         : ""
     }
   </div>
@@ -1003,6 +1050,20 @@ async function handleHover(e, link) {
   cache.set(href, html);
   if (!popup) return;
   popup.innerHTML = html;
+  
+  // Add click handler for "View more" button if truncated
+  if (truncated) {
+    const viewMoreBtn = popup.querySelector('.view-more-btn');
+    if (viewMoreBtn) {
+      viewMoreBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const container = popup.querySelector('.code-preview-container');
+        expandTruncatedCode(container, res.content, language);
+      });
+    }
+  }
+  
   Prism.highlightAllUnder(popup);
 }
 
