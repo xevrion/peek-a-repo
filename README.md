@@ -5,6 +5,7 @@ Peek inside GitHub files and folders **without clicking**.
 A small Chrome extension born out of pure developer frustration.
 
 ---
+![peeking-demo](https://github.com/user-attachments/assets/70fdedbf-70ae-446f-8ca4-c1dbc8bcae64)
 
 ## The problem
 
