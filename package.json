@@ -21,6 +21,7 @@
     "tailwindcss": "^4.1.18"
   },
   "dependencies": {
-    "@tailwindcss/cli": "^4.1.18"
+    "@tailwindcss/cli": "^4.1.18",
+    "pdfjs-dist": "^2.16.105"
   }
 }

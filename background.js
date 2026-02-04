@@ -1,319 +1,218 @@
-const GITHUB_API = "https://api.github.com/graphql";
-const GITHUB_CLIENT_ID = "Ov23li7jLGhcwdkrnVXS"; // Public client ID for OAuth
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Handle PDF fetch
+  if (request.type === "FETCH_PDF") {
+    handlePDFFetch(request.url)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    
+    return true; // CRITICAL: keeps message port open for async response
+  }
 
-// Open options page when extension icon is clicked
-chrome.action.onClicked.addListener(() => {
-  chrome.runtime.openOptionsPage();
+  // Handle file fetch
+  if (request.type === "FETCH_FILE") {
+    handleFileFetch(request.owner, request.repo, request.branch, request.path)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ error: error.message }));
+    
+    return true;
+  }
+
+  // Handle page/directory fetch
+  if (request.type === "FETCH_PAGE") {
+    handlePageFetch(request.owner, request.repo, request.branch, request.path)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ error: error.message }));
+    
+    return true;
+  }
+
+  // Handle options page open
+  if (request.type === "OPEN_OPTIONS") {
+    chrome.runtime.openOptionsPage();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  // Unknown message type
+  sendResponse({ error: "Unknown message type" });
+  return false;
 });
 
-// Check if user has token on install/update
-chrome.runtime.onInstalled.addListener(async (details) => {
-  if (details.reason === "install") {
-    const { githubToken } = await chrome.storage.sync.get("githubToken");
-    if (!githubToken) {
-      // Open options page for OAuth login
-      chrome.runtime.openOptionsPage();
+// ============================================
+// PDF Functions
+// ============================================
+
+async function handlePDFFetch(url) {
+  try {
+    const rawUrl = convertToRawUrl(url);
+    
+    const response = await fetch(rawUrl);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = arrayBufferToBase64(arrayBuffer);
+    
+    return { success: true, data: base64 };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function convertToRawUrl(url) {
+  // GitHub blob: https://github.com/user/repo/blob/main/file.pdf
+  // Raw URL:     https://raw.githubusercontent.com/user/repo/main/file.pdf
+  
+  const blobPattern = /github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)/;
+  const match = url.match(blobPattern);
+  
+  if (match) {
+    const [, user, repo, path] = match;
+    return `https://raw.githubusercontent.com/${user}/${repo}/${path}`;
+  }
+  
+  return url;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 8192;
+  
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
     }
   }
-});
+  
+  return btoa(binary);
+}
 
-// Handle OAuth flow
-async function initiateGitHubOAuth() {
-  const redirectURL = chrome.identity.getRedirectURL();
-  const clientId = GITHUB_CLIENT_ID;
-  const scopes = "read:user";
-  
-  const authURL = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectURL)}&scope=${encodeURIComponent(scopes)}`;
-  
-  return new Promise((resolve, reject) => {
-    chrome.identity.launchWebAuthFlow(
-      {
-        url: authURL,
-        interactive: true,
-      },
-      async (redirectUrl) => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-          return;
-        }
-        
-        // Extract the code from the redirect URL
-        const url = new URL(redirectUrl);
-        const code = url.searchParams.get("code");
-        
-        if (code) {
-          try {
-            // Exchange code for token using GitHub's device flow as a workaround
-            // Since we can't directly exchange the code without a client secret in the extension
-            // We'll use GitHub's token directly from the auth flow
-            // Note: For production, you'd need a backend server to exchange the code
-            
-            // For now, we'll use a proxy service or direct token method
-            // This is a simplified version - you may need to set up a backend
-            resolve({ code });
-          } catch (error) {
-            reject(error);
-          }
-        } else {
-          reject(new Error("No code found in redirect URL"));
-        }
-      }
-    );
+// ============================================
+// GitHub API Functions
+// ============================================
+
+async function getToken() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(["githubToken"], (result) => {
+      resolve(result.githubToken || null);
+    });
   });
 }
 
-// Single unified message listener
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "FETCH_FILE") {
-    fetchFile(msg).then(sendResponse);
-    return true;
-  }
-
-  if (msg.type === "FETCH_FOLDER") {
-    fetchFolder(msg).then(sendResponse);
-    return true;
-  }
-
-  if (msg.type === "FETCH_PAGE") {
-    fetchPage(msg).then(sendResponse);
-    return true;
-  }
-  
-  if (msg.type === "OAUTH_LOGIN") {
-    initiateGitHubOAuth()
-      .then((result) => sendResponse({ success: true, ...result }))
-      .catch((error) => sendResponse({ success: false, error: error.message }));
-    return true;
-  }
-  
-  if (msg.type === "OPEN_OPTIONS") {
-    chrome.runtime.openOptionsPage();
-    sendResponse({ success: true });
-    return true;
-  }
-});
-
-async function fetchFile({ owner, repo, branch, path }) {
-  const { githubToken } = await chrome.storage.sync.get("githubToken");
-  if (!githubToken) return { error: "NO_TOKEN" };
-
-  const query = `
-    query ($owner: String!, $repo: String!, $expression: String!) {
-      repository(owner: $owner, name: $repo) {
-        object(expression: $expression) {
-          ... on Blob {
-            text
-          }
-        }
-      }
-    }
-  `;
-
+async function handleFileFetch(owner, repo, branch, path) {
   try {
-    const res = await fetch(GITHUB_API, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${githubToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query,
-        variables: {
-          owner,
-          repo,
-          expression: `${branch}:${path}`,
-        },
-      }),
-    });
-
-    // Check for rate limiting
-    if (res.status === 403 || res.status === 429) {
-      return { error: "RATE_LIMIT" };
-    }
-
-    const json = await res.json();
-
-    if (json.errors) {
-      // Check for rate limit in GraphQL errors
-      const rateLimitError = json.errors.find(e => 
-        e.message?.toLowerCase().includes('rate limit') || 
-        e.type === 'RATE_LIMITED'
-      );
-      if (rateLimitError) {
-        return { error: "RATE_LIMIT" };
-      }
-      
-      // Check for private repo access errors (NOT_FOUND usually means no permission)
-      const privateRepoError = json.errors.find(e =>
-        e.type === 'NOT_FOUND' ||
-        e.message?.toLowerCase().includes('not found') ||
-        e.message?.toLowerCase().includes('permission')
-      );
-      if (privateRepoError) {
-        return { error: "PRIVATE_REPO_NO_ACCESS" };
-      }
-      
-      return { error: json.errors[0].message };
-    }
-
-    return {
-      content: json?.data?.repository?.object?.text || null,
+    const token = await getToken();
+    
+    const headers = {
+      'Accept': 'application/vnd.github.v3.raw'
     };
-  } catch (err) {
-    return { error: err.message };
+    
+    if (token) {
+      headers['Authorization'] = `token ${token}`;
+    }
+    
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+    
+    const response = await fetch(url, { headers });
+    
+    if (response.status === 401 || response.status === 403) {
+      const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
+      if (rateLimitRemaining === '0') {
+        return { error: 'RATE_LIMIT' };
+      }
+      return { error: 'NO_TOKEN' };
+    }
+    
+    if (response.status === 404) {
+      return { error: 'PRIVATE_REPO_NO_ACCESS' };
+    }
+    
+    if (!response.ok) {
+      return { error: 'DEFAULT' };
+    }
+    
+    const content = await response.text();
+    return { content };
+  } catch (error) {
+    return { error: error.message };
   }
 }
 
-async function fetchPage({ owner, repo, branch, path }) {
-  const { githubToken } = await chrome.storage.sync.get("githubToken");
-  if (!githubToken) return { error: "NO_TOKEN" };
-
-  // Fetch all entries with their content in a single API call
-  const query = `
-    query ($owner: String!, $repo: String!, $expression: String!) {
-      repository(owner: $owner, name: $repo) {
-        object(expression: $expression) {
-          ... on Tree {
-            entries {
-              name
-              type
-              object {
-                ... on Blob {
-                  text
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
-
+async function handlePageFetch(owner, repo, branch, path) {
   try {
-    const res = await fetch(GITHUB_API, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${githubToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query,
-        variables: {
-          owner,
-          repo,
-          expression: `${branch}:${path}`,
-        },
-      }),
-    });
-
-    // Check for rate limiting
-    if (res.status === 403 || res.status === 429) {
-      return { error: "RATE_LIMIT" };
-    }
-
-    const json = await res.json();
-
-    if (json.errors) {
-      // Check for rate limit in GraphQL errors
-      const rateLimitError = json.errors.find(e => 
-        e.message?.toLowerCase().includes('rate limit') || 
-        e.type === 'RATE_LIMITED'
-      );
-      if (rateLimitError) {
-        return { error: "RATE_LIMIT" };
-      }
-      
-      // Check for private repo access errors
-      const privateRepoError = json.errors.find(e =>
-        e.type === 'NOT_FOUND' ||
-        e.message?.toLowerCase().includes('not found') ||
-        e.message?.toLowerCase().includes('permission')
-      );
-      if (privateRepoError) {
-        return { error: "PRIVATE_REPO_NO_ACCESS" };
-      }
-      
-      return { error: json.errors[0].message };
-    }
-
-    const entries = json?.data?.repository?.object?.entries || [];
-
-    // Transform the data to include file contents
-    const filesWithContent = {};
-    entries.forEach((entry) => {
-      if (entry.type === "blob" && entry.object?.text) {
-        filesWithContent[entry.name] = entry.object.text;
-      }
-    });
-
-    return {
-      entries: entries.map((e) => ({ name: e.name, type: e.type })),
-      files: filesWithContent,
+    const token = await getToken();
+    
+    const headers = {
+      'Accept': 'application/vnd.github.v3+json'
     };
-  } catch (err) {
-    return { error: err.message };
-  }
-}
-
-async function fetchFolder({ owner, repo, branch, path }) {
-  const { githubToken } = await chrome.storage.sync.get("githubToken");
-  if (!githubToken) return { error: "NO_TOKEN" };
-
-  const query = `
-    query ($owner: String!, $repo: String!, $expression: String!) {
-      repository(owner: $owner, name: $repo) {
-        object(expression: $expression) {
-          ... on Tree {
-            entries {
-              name
-              type
-            }
-          }
-        }
+    
+    if (token) {
+      headers['Authorization'] = `token ${token}`;
+    }
+    
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+    
+    const response = await fetch(url, { headers });
+    
+    if (response.status === 401 || response.status === 403) {
+      const rateLimitRemaining = response.headers.get('X-RateLimit-Remaining');
+      if (rateLimitRemaining === '0') {
+        return { error: 'RATE_LIMIT' };
       }
+      return { error: 'NO_TOKEN' };
     }
-  `;
-
-  try {
-    const res = await fetch(GITHUB_API, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${githubToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query,
-        variables: {
-          owner,
-          repo,
-          expression: `${branch}:${path}`,
-        },
-      }),
-    });
-
-    // Check for rate limiting
-    if (res.status === 403 || res.status === 429) {
-      return { error: "RATE_LIMIT" };
+    
+    if (response.status === 404) {
+      return { error: 'PRIVATE_REPO_NO_ACCESS' };
     }
-
-    const json = await res.json();
-
-    if (json.errors) {
-      // Check for rate limit in GraphQL errors
-      const rateLimitError = json.errors.find(e => 
-        e.message?.toLowerCase().includes('rate limit') || 
-        e.type === 'RATE_LIMITED'
-      );
-      if (rateLimitError) {
-        return { error: "RATE_LIMIT" };
+    
+    if (!response.ok) {
+      return { error: 'DEFAULT' };
+    }
+    
+    const data = await response.json();
+    
+    if (!Array.isArray(data)) {
+      return { entries: [] };
+    }
+    
+    // Sort: folders first, then files
+    const entries = data
+      .map(item => ({
+        name: item.name,
+        type: item.type === 'dir' ? 'tree' : 'blob',
+        size: item.size
+      }))
+      .sort((a, b) => {
+        if (a.type === 'tree' && b.type !== 'tree') return -1;
+        if (a.type !== 'tree' && b.type === 'tree') return 1;
+        return a.name.localeCompare(b.name);
+      });
+    
+    // Fetch file contents for small text files
+    const files = {};
+    const textExtensions = ['js', 'ts', 'jsx', 'tsx', 'json', 'md', 'txt', 'css', 'html', 'py', 'go', 'rs', 'yaml', 'yml', 'sh', 'bash'];
+    
+    const fileEntries = entries.filter(e => 
+      e.type === 'blob' && 
+      e.size < 50000 &&
+      textExtensions.some(ext => e.name.toLowerCase().endsWith('.' + ext))
+    ).slice(0, 10);
+    
+    await Promise.all(fileEntries.map(async (entry) => {
+      const filePath = path ? `${path}/${entry.name}` : entry.name;
+      const result = await handleFileFetch(owner, repo, branch, filePath);
+      if (result.content) {
+        files[entry.name] = result.content;
       }
-      return { error: json.errors[0].message };
-    }
-
-    return {
-      entries: json?.data?.repository?.object?.entries || [],
-    };
-  } catch (err) {
-    return { error: err.message };
+    }));
+    
+    return { entries, files };
+  } catch (error) {
+    return { error: error.message };
   }
 }

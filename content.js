@@ -3,17 +3,16 @@ const MAX_IMAGE_AREA = 480 * 320;
 const POPUP_GAP = 10;
 const MIN_POPUP_WIDTH = 200;
 const cache = new Map();
-const pageCache = new Map(); // Cache for entire page/directory data
-const pendingRequests = new Map(); // Track in-flight requests to prevent duplicates
+const pageCache = new Map();
+const pendingRequests = new Map();
 
 let hoverTimer = null;
 let popup = null;
 let lastTarget = null;
 let isPopupShown = false;
-let nestedPopups = []; // Array to track all nested popups
-let loginNotificationShown = false; // Track if we've shown the login notification
+let nestedPopups = [];
+let loginNotificationShown = false;
 
-// Error messages
 const ERROR_MESSAGES = {
   NO_TOKEN: "Please set your GitHub token in extension options.",
   RATE_LIMIT: "API rate limit exceeded. Please wait a moment before trying again.",
@@ -21,7 +20,125 @@ const ERROR_MESSAGES = {
   DEFAULT: "An error occurred. Please try again.",
 };
 
-// Check login status and show notification if needed
+// Placeholder function (no longer needed but called in destroyPopup)
+function cancelPdfRender() {
+  // No-op - PDF rendering happens in iframe now
+}
+
+function isPDFFile(path) {
+  if (!path) return false;
+  return /\.pdf$/i.test(path);
+}
+
+async function fetchPDFData(url) {
+  return new Promise((resolve, reject) => {
+    if (!chrome.runtime?.id) {
+      reject(new Error('Extension context invalidated'));
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      { type: 'FETCH_PDF', url: url },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        
+        if (!response) {
+          reject(new Error('No response from background script'));
+          return;
+        }
+        
+        if (response.success && response.data) {
+          resolve(response.data);
+        } else {
+          reject(new Error(response.error || 'Failed to fetch PDF'));
+        }
+      }
+    );
+  });
+}
+
+// Create PDF preview using iframe
+function createPDFPreview(base64Data, options = {}) {
+  return new Promise((resolve, reject) => {
+    const { maxPages = 2, scale = 1.2, maxWidth = 380 } = options;
+    
+    // Create container
+    const container = document.createElement('div');
+    container.className = 'pdf-iframe-container';
+    container.style.cssText = 'width: 100%; min-height: 100px;';
+    
+    // Create iframe pointing to our extension's PDF viewer
+    const iframe = document.createElement('iframe');
+    iframe.src = chrome.runtime.getURL('pdf-viewer.html');
+    iframe.style.cssText = `
+      width: 100%;
+      min-height: 200px;
+      border: none;
+      background: transparent;
+      display: block;
+    `;
+    iframe.setAttribute('scrolling', 'no');
+    
+    let timeoutId;
+    let resolved = false;
+    
+    // Handle messages from iframe
+    const messageHandler = (event) => {
+      // Only accept messages from our iframe
+      if (event.source !== iframe.contentWindow) return;
+      
+      if (event.data.type === 'PDF_VIEWER_READY') {
+        // Send PDF data to iframe
+        iframe.contentWindow.postMessage({
+          type: 'RENDER_PDF',
+          base64Data: base64Data,
+          options: { maxPages, scale, maxWidth }
+        }, '*');
+      }
+      
+      if (event.data.type === 'PDF_RENDERED') {
+        clearTimeout(timeoutId);
+        window.removeEventListener('message', messageHandler);
+        
+        if (!resolved) {
+          resolved = true;
+          
+          if (event.data.success) {
+            // Adjust iframe height
+            if (event.data.height) {
+              iframe.style.height = `${event.data.height + 10}px`;
+            }
+            resolve(container);
+          } else {
+            reject(new Error(event.data.error || 'Failed to render PDF'));
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('message', messageHandler);
+    
+    // Timeout after 15 seconds
+    timeoutId = setTimeout(() => {
+      window.removeEventListener('message', messageHandler);
+      if (!resolved) {
+        resolved = true;
+        reject(new Error('PDF render timeout'));
+      }
+    }, 15000);
+    
+    container.appendChild(iframe);
+    resolve(container);
+  });
+}
+
+// ============================================
+// Existing Helper Functions
+// ============================================
+
 async function checkAndNotifyLogin() {
   if (loginNotificationShown) return;
   
@@ -29,14 +146,12 @@ async function checkAndNotifyLogin() {
     chrome.storage.sync.get(["githubToken", "dismissedLoginNotification"], resolve);
   });
   
-  // Don't show if user has dismissed it permanently or if they have a token
   if (!result.githubToken && !result.dismissedLoginNotification) {
     showLoginNotification();
     loginNotificationShown = true;
   }
 }
 
-// Helper function to expand truncated code
 function expandTruncatedCode(containerElement, fullContent, language) {
   const preElement = containerElement.querySelector('pre');
   const codeElement = containerElement.querySelector('code');
@@ -45,12 +160,10 @@ function expandTruncatedCode(containerElement, fullContent, language) {
   if (preElement && codeElement) {
     codeElement.textContent = fullContent;
     
-    // Re-apply Prism highlighting
     if (window.Prism) {
       Prism.highlightElement(codeElement);
     }
     
-    // Remove the truncated message
     if (truncatedMessage) {
       truncatedMessage.remove();
     }
@@ -58,7 +171,6 @@ function expandTruncatedCode(containerElement, fullContent, language) {
 }
 
 function showLoginNotification() {
-  // Create notification banner
   const notification = document.createElement("div");
   notification.id = "peek-a-repo-login-notification";
   notification.innerHTML = `
@@ -120,32 +232,23 @@ function showLoginNotification() {
     </div>
   `;
   
-  // Add animation keyframes
   const style = document.createElement("style");
   style.textContent = `
     @keyframes slideInRight {
-      from {
-        transform: translateX(20px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
+      from { transform: translateX(20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
     }
     @keyframes slideOutRight {
-      from {
-        transform: translateX(0);
-        opacity: 1;
-      }
-      to {
-        transform: translateX(20px);
-        opacity: 0;
-      }
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(20px); opacity: 0; }
     }
-    #peek-login-btn:hover {
-      background: #2ea043;
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
+    #peek-login-btn:hover { background: #2ea043; }
     #peek-dismiss-btn:hover {
       background: rgba(240, 246, 252, 0.1);
       border-color: rgba(240, 246, 252, 0.2);
@@ -155,19 +258,17 @@ function showLoginNotification() {
   
   document.body.appendChild(notification);
   
-  // Add event listeners
   document.getElementById("peek-login-btn").addEventListener("click", () => {
     chrome.runtime.sendMessage({ type: "OPEN_OPTIONS" });
     dismissNotification();
   });
   
   document.getElementById("peek-dismiss-btn").addEventListener("click", () => {
-    dismissNotification(true); // Pass true to save the dismissal permanently
+    dismissNotification(true);
   });
   
   function dismissNotification(saveDismissal = false) {
     if (saveDismissal) {
-      // Save to storage that user doesn't want to see this again
       chrome.storage.sync.set({ dismissedLoginNotification: true });
     }
     
@@ -179,13 +280,14 @@ function showLoginNotification() {
   }
 }
 
-// Check login status when page loads
 checkAndNotifyLogin();
 
 const ICONS = {
   folder: `<svg aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill icon-directory" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`,
   file: `<svg aria-hidden="true" focusable="false" class="octicon octicon-file color-fg-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path></svg>`,
+  pdf: `<svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" style="vertical-align:text-bottom"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path><path d="M5.5 9a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5Zm0 2.5a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"></path></svg>`,
 };
+
 function lockBodyScroll() {
   document.body.classList.add("scroll-hidden");
 }
@@ -224,7 +326,6 @@ function createPopup() {
   });
 
   popup.addEventListener("mouseleave", (e) => {
-    // Check if mouse is moving to a nested popup
     const movingToNested = nestedPopups.some(np => np.element.contains(e.relatedTarget));
     if (!movingToNested) {
       unlockBodyScroll();
@@ -237,7 +338,6 @@ function createPopup() {
     "wheel",
     (e) => {
       e.stopPropagation();
-      // Let the browser handle scrolling naturally, just prevent it from bubbling to body
     },
     { passive: false }
   );
@@ -245,6 +345,8 @@ function createPopup() {
 
 function destroyPopup() {
   if (!popup) return;
+
+  cancelPdfRender();
 
   popup.classList.remove("opacity-100", "scale-100", "translate-y-0");
   popup.classList.add("opacity-0", "scale-[0.98]", "translate-y-1");
@@ -254,7 +356,6 @@ function destroyPopup() {
   isPopupShown = false;
   unlockBodyScroll();
   
-  // Destroy all nested popups
   nestedPopups.forEach(np => {
     np.element.classList.add("opacity-0", "scale-[0.98]", "translate-y-1");
     setTimeout(() => np.element.remove(), 150);
@@ -263,7 +364,7 @@ function destroyPopup() {
   
   setTimeout(() => {
     el.remove();
-  }, 150); // must match transition duration
+  }, 150);
 }
 
 function createNestedPopup(level, parentElement) {
@@ -298,7 +399,6 @@ function createNestedPopup(level, parentElement) {
 }
 
 function destroyNestedPopupsFromLevel(level) {
-  // Remove all popups at this level and beyond
   const toRemove = nestedPopups.filter(np => np.level >= level);
   nestedPopups = nestedPopups.filter(np => np.level < level);
   
@@ -312,7 +412,6 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
   const folderElements = parentElement.querySelectorAll("[data-type='tree']");
   
   folderElements.forEach((folderElement) => {
-    // Skip if already has listener attached
     if (folderElement.dataset.hasListener) return;
     folderElement.dataset.hasListener = "true";
     
@@ -320,19 +419,15 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
       const folderName = folderElement.textContent.trim();
       const folderPath = basePath ? `${basePath}/${folderName}` : folderName;
       
-      // Calculate available width
       const rect = folderElement.getBoundingClientRect();
-      const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20; // 20px padding from edge
+      const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
       
-      // Only create nested popup if there's enough space
       if (availableWidth < MIN_POPUP_WIDTH) {
         return;
       }
       
-      // Always destroy any popups at this level or deeper first
       destroyNestedPopupsFromLevel(level + 1);
       
-      // Create new nested popup
       const nestedPopup = createNestedPopup(level + 1, folderElement);
       nestedPopups.push(nestedPopup);
       
@@ -342,19 +437,16 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
         </div>
       `;
       
-      // Position the nested popup
       nestedPopup.element.style.top = `${rect.top}px`;
       nestedPopup.element.style.left = `${rect.right + POPUP_GAP}px`;
       nestedPopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
       
-      // Animate in
       requestAnimationFrame(() => {
         if (!nestedPopup.element.parentElement) return;
         nestedPopup.element.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
         nestedPopup.element.classList.add("opacity-100", "scale-100", "translate-y-0");
       });
       
-      // Use deduped fetch to prevent multiple requests
       const result = await fetchPageDeduped(owner, repo, branch, folderPath);
       
       if (!nestedPopup.element.parentElement) return;
@@ -379,7 +471,6 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
       
       const pageData = result.data;
       
-      // Render folder contents
       const rows = pageData.entries
         .slice(0, 25)
         .map((entry) => {
@@ -406,7 +497,6 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
       
       nestedPopup.element.innerHTML = html;
       
-      // Add click handlers for files in nested popup
       nestedPopup.element.querySelectorAll("[data-type='blob']").forEach((fileEl) => {
         fileEl.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -417,17 +507,82 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
         });
       });
       
-      // Add hover handlers for files to show preview from cached data
       nestedPopup.element.querySelectorAll("[data-type='blob']").forEach((fileEl) => {
-        fileEl.addEventListener("mouseenter", (e) => {
+        fileEl.addEventListener("mouseenter", async (e) => {
           const fileName = fileEl.getAttribute("data-file");
           const fileContent = pageData.files[fileName];
           const filePath = `${folderPath}/${fileName}`;
           
-          // Always destroy existing deeper nested popups first
           destroyNestedPopupsFromLevel(level + 2);
           
-          // Check if it's an image file
+          // ===== FIX #1: Changed renderPDFPreview to createPDFPreview =====
+          if (isPDFFile(fileName)) {
+            const rect = fileEl.getBoundingClientRect();
+            const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
+            
+            if (availableWidth < MIN_POPUP_WIDTH) {
+              return;
+            }
+            
+            const filePopup = createNestedPopup(level + 2, fileEl);
+            nestedPopups.push(filePopup);
+            
+            filePopup.element.innerHTML = `
+              <div class="w-full flex flex-col items-center justify-center p-4 gap-2">
+                <div class="w-5 h-5 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
+                <span class="text-[10px] opacity-60">Loading PDF…</span>
+              </div>
+            `;
+            
+            filePopup.element.style.top = `${rect.top}px`;
+            filePopup.element.style.left = `${rect.right + POPUP_GAP}px`;
+            filePopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
+            
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                if (!filePopup.element.parentElement) return;
+                filePopup.element.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+                filePopup.element.classList.add("opacity-100", "scale-100", "translate-y-0");
+              });
+            });
+            
+            try {
+              const pdfUrl = `https://github.com/${owner}/${repo}/blob/${branch}/${filePath}`;
+              const base64Data = await fetchPDFData(pdfUrl);
+              
+              if (!filePopup.element.parentElement) return;
+              
+              // FIX: Use createPDFPreview instead of renderPDFPreview
+              const container = await createPDFPreview(base64Data, {
+                maxPages: 1,
+                scale: 1.0,
+                maxWidth: 300
+              });
+              
+              filePopup.element.innerHTML = '';
+              filePopup.element.appendChild(container);
+              
+            } catch (error) {
+              if (!filePopup.element.parentElement) return;
+              filePopup.element.innerHTML = `
+                <div class="p-3 flex flex-col items-center gap-2">
+                  <div class="text-xl">📄</div>
+                  <div class="text-[10px] opacity-60 text-center">Unable to preview</div>
+                </div>
+              `;
+            }
+            
+            filePopup.element.addEventListener("mouseleave", (e) => {
+              const movingToParent = nestedPopup.element.contains(e.relatedTarget);
+              if (!movingToParent) {
+                destroyNestedPopupsFromLevel(level + 2);
+              }
+            });
+            
+            return;
+          }
+          // ===== END FIX #1 =====
+          
           if (isImageFile(fileName)) {
             const rect = fileEl.getBoundingClientRect();
             const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
@@ -449,12 +604,10 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
             
             filePopup.element.innerHTML = previewHtml;
             
-            // Position the file preview popup
             filePopup.element.style.top = `${rect.top}px`;
             filePopup.element.style.left = `${rect.right + POPUP_GAP}px`;
             filePopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
             
-            // Animate in
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 if (!filePopup.element.parentElement) return;
@@ -463,7 +616,6 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
               });
             });
             
-            // Handle mouse leave from file preview popup
             filePopup.element.addEventListener("mouseleave", (e) => {
               const movingToParent = nestedPopup.element.contains(e.relatedTarget);
               if (!movingToParent) {
@@ -475,7 +627,6 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
           }
           
           if (fileContent) {
-            // Create preview popup for file
             const rect = fileEl.getBoundingClientRect();
             const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
             
@@ -500,7 +651,6 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
             
             filePopup.element.innerHTML = previewHtml;
             
-            // Add click handler for "View more" button if truncated
             if (truncated) {
               const viewMoreBtn = filePopup.element.querySelector('.view-more-btn');
               if (viewMoreBtn) {
@@ -513,12 +663,10 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
               }
             }
             
-            // Position the file preview popup
             filePopup.element.style.top = `${rect.top}px`;
             filePopup.element.style.left = `${rect.right + POPUP_GAP}px`;
             filePopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
             
-            // Animate in - use double rAF to ensure styles are applied first
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 if (!filePopup.element.parentElement) return;
@@ -531,7 +679,6 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
               });
             });
             
-            // Handle mouse leave from file preview popup
             filePopup.element.addEventListener("mouseleave", (e) => {
               const movingToParent = nestedPopup.element.contains(e.relatedTarget);
               if (!movingToParent) {
@@ -542,21 +689,17 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
         });
         
         fileEl.addEventListener("mouseleave", (e) => {
-          // Check if moving to the file preview popup or staying within parent popup
           const movingToNested = nestedPopups.some(np => np.level > level + 1 && np.element.contains(e.relatedTarget));
           const movingToSibling = nestedPopup.element.contains(e.relatedTarget);
           
-          // Only destroy if leaving to somewhere outside both
           if (!movingToNested && !movingToSibling) {
             destroyNestedPopupsFromLevel(level + 2);
           }
         });
       });
       
-      // Recursively set up handlers for folders in the nested popup
       setupNestedFolderHandlers(nestedPopup.element, owner, repo, branch, folderPath, level + 1);
       
-      // Handle mouse leave - only destroy if not moving to a deeper nested popup
       nestedPopup.element.addEventListener("mouseleave", (e) => {
         const movingToDeeper = nestedPopups.some(np => 
           np.level > level + 1 && np.element.contains(e.relatedTarget)
@@ -570,12 +713,10 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
       });
     });
     
-    // When leaving the folder element, check if we're going to the nested popup or sibling
     folderElement.addEventListener("mouseleave", (e) => {
       const movingToNested = nestedPopups.some(np => np.level >= level + 1 && np.element.contains(e.relatedTarget));
       const movingToSibling = parentElement.contains(e.relatedTarget);
       
-      // Only destroy if leaving to somewhere outside both
       if (!movingToNested && !movingToSibling) {
         destroyNestedPopupsFromLevel(level + 1);
       }
@@ -584,7 +725,7 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
 }
 
 function isImageFile(path) {
-  return /\.(png|jpe?g|gif|svg|web?p)$/i.test(path);
+  return /\.(png|jpe?g|gif|svg|webp)$/i.test(path);
 }
 
 function getRepoInfo() {
@@ -607,31 +748,26 @@ function buildRawUrl(href) {
 
 function positionPopup(e) {
   const offset = 15;
-  const padding = 20; // padding from screen edge
+  const padding = 20;
 
   const viewportHeight = window.innerHeight;
   const viewportWidth = window.innerWidth;
 
-  // Calculate available height from cursor to bottom of viewport
   const availableHeight = viewportHeight - e.clientY - offset - padding;
 
-  // Set max-height based on available space
   popup.style.maxHeight = `${Math.max(200, availableHeight)}px`;
 
   let top = e.clientY + offset;
   let left = e.clientX + offset;
 
-  // Set initial position
   popup.style.top = `${top}px`;
   popup.style.left = `${left}px`;
 
-  // Adjust position after render if needed
   requestAnimationFrame(() => {
     if (!popup) return;
 
     const popupWidth = popup.offsetWidth;
 
-    // Adjust if popup goes beyond right edge
     if (left + popupWidth > viewportWidth - padding) {
       left = Math.max(padding, viewportWidth - popupWidth - padding);
       popup.style.left = `${left}px`;
@@ -655,21 +791,17 @@ function fetchViaBackground(payload) {
   });
 }
 
-// Deduped fetch - prevents multiple identical requests
 async function fetchPageDeduped(owner, repo, branch, path) {
   const cacheKey = `${owner}/${repo}/${branch}/${path}`;
   
-  // Return cached data if available
   if (pageCache.has(cacheKey)) {
     return { data: pageCache.get(cacheKey), fromCache: true };
   }
   
-  // If request is already in flight, wait for it
   if (pendingRequests.has(cacheKey)) {
     return pendingRequests.get(cacheKey);
   }
   
-  // Create new request promise
   const requestPromise = (async () => {
     const res = await fetchViaBackground({
       type: "FETCH_PAGE",
@@ -679,10 +811,8 @@ async function fetchPageDeduped(owner, repo, branch, path) {
       path,
     });
     
-    // Remove from pending
     pendingRequests.delete(cacheKey);
     
-    // Handle errors
     if (res?.error) {
       return { error: res.error };
     }
@@ -691,12 +821,10 @@ async function fetchPageDeduped(owner, repo, branch, path) {
       return { empty: true };
     }
     
-    // Cache successful response
     pageCache.set(cacheKey, res);
     return { data: res, fromCache: false };
   })();
   
-  // Store pending request
   pendingRequests.set(cacheKey, requestPromise);
   
   return requestPromise;
@@ -705,7 +833,6 @@ async function fetchPageDeduped(owner, repo, branch, path) {
 function getErrorMessage(errorCode) {
   return ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.DEFAULT;
 }
-
 
 function getPrismLanguage(path) {
   const ext = path.split(".").pop().toLowerCase();
@@ -745,9 +872,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Helper function to attach event handlers to folder popup elements
 function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, basePath) {
-  // Add click handlers for files
   popupElement.querySelectorAll("[data-type='blob']").forEach((fileElement) => {
     fileElement.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -758,17 +883,79 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
     });
   });
   
-  // Add hover handlers for files to show preview from cached data
   popupElement.querySelectorAll("[data-type='blob']").forEach((fileElement) => {
-    fileElement.addEventListener("mouseenter", (e) => {
+    fileElement.addEventListener("mouseenter", async (e) => {
       const fileName = fileElement.getAttribute("data-file");
       const fileContent = pageData.files ? pageData.files[fileName] : null;
       const filePath = basePath ? `${basePath}/${fileName}` : fileName;
       
-      // Always destroy existing nested popups first when entering a new file
       destroyNestedPopupsFromLevel(1);
       
-      // Check if it's an image file
+      if (isPDFFile(fileName)) {
+        const rect = fileElement.getBoundingClientRect();
+        const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
+        
+        if (availableWidth < MIN_POPUP_WIDTH) {
+          return;
+        }
+        
+        const nestedPopup = createNestedPopup(1, fileElement);
+        nestedPopups.push(nestedPopup);
+        
+        nestedPopup.element.innerHTML = `
+          <div class="w-full flex flex-col items-center justify-center p-4 gap-2">
+            <div class="w-5 h-5 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
+            <span class="text-[10px] opacity-60">Loading PDF…</span>
+          </div>
+        `;
+        
+        nestedPopup.element.style.top = `${rect.top}px`;
+        nestedPopup.element.style.left = `${rect.right + POPUP_GAP}px`;
+        nestedPopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
+        
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (!nestedPopup.element.parentElement) return;
+            nestedPopup.element.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
+            nestedPopup.element.classList.add("opacity-100", "scale-100", "translate-y-0");
+          });
+        });
+        
+        try {
+          const pdfUrl = `https://github.com/${owner}/${repo}/blob/${branch}/${filePath}`;
+          const base64Data = await fetchPDFData(pdfUrl);
+          
+          if (!nestedPopup.element.parentElement) return;
+          
+          const container = await createPDFPreview(base64Data, {
+            maxPages: 1,
+            scale: 1.0,
+            maxWidth: 300
+          });
+          
+          nestedPopup.element.innerHTML = '';
+          nestedPopup.element.appendChild(container);
+          
+        } catch (error) {
+          if (!nestedPopup.element.parentElement) return;
+          nestedPopup.element.innerHTML = `
+            <div class="p-3 flex flex-col items-center gap-2">
+              <div class="text-xl">📄</div>
+              <div class="text-[10px] opacity-60 text-center">Unable to preview</div>
+            </div>
+          `;
+        }
+        
+        nestedPopup.element.addEventListener("mouseleave", (e) => {
+          const movingToParent = popupElement.contains(e.relatedTarget);
+          if (!movingToParent) {
+            destroyNestedPopupsFromLevel(1);
+          }
+        });
+        
+        return;
+      }
+        
       if (isImageFile(fileName)) {
         const rect = fileElement.getBoundingClientRect();
         const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
@@ -790,12 +977,10 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
         
         nestedPopup.element.innerHTML = previewHtml;
         
-        // Position the nested popup
         nestedPopup.element.style.top = `${rect.top}px`;
         nestedPopup.element.style.left = `${rect.right + POPUP_GAP}px`;
         nestedPopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
         
-        // Animate in
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (!nestedPopup.element.parentElement) return;
@@ -804,7 +989,6 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
           });
         });
         
-        // Handle mouse leave from nested popup
         nestedPopup.element.addEventListener("mouseleave", (e) => {
           const movingToParent = popupElement.contains(e.relatedTarget);
           if (!movingToParent) {
@@ -816,7 +1000,6 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
       }
       
       if (fileContent) {
-        // Create preview popup for file
         const rect = fileElement.getBoundingClientRect();
         const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
         
@@ -841,7 +1024,6 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
         
         nestedPopup.element.innerHTML = previewHtml;
         
-        // Add click handler for "View more" button if truncated
         if (truncated) {
           const viewMoreBtn = nestedPopup.element.querySelector('.view-more-btn');
           if (viewMoreBtn) {
@@ -854,12 +1036,10 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
           }
         }
         
-        // Position the nested popup
         nestedPopup.element.style.top = `${rect.top}px`;
         nestedPopup.element.style.left = `${rect.right + POPUP_GAP}px`;
         nestedPopup.element.style.maxHeight = `${window.innerHeight - rect.top - 20}px`;
         
-        // Animate in - use double rAF to ensure styles are applied first
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (!nestedPopup.element.parentElement) return;
@@ -872,7 +1052,6 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
           });
         });
         
-        // Handle mouse leave from nested popup
         nestedPopup.element.addEventListener("mouseleave", (e) => {
           const movingToParent = popupElement.contains(e.relatedTarget);
           if (!movingToParent) {
@@ -883,25 +1062,21 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
     });
     
     fileElement.addEventListener("mouseleave", (e) => {
-      // Check if moving to the nested popup or staying within parent popup
       const movingToNested = nestedPopups.some(np => np.element.contains(e.relatedTarget));
       const movingToSibling = popupElement.contains(e.relatedTarget);
       
-      // Only destroy if leaving to somewhere outside both
       if (!movingToNested && !movingToSibling) {
         destroyNestedPopupsFromLevel(1);
       }
     });
   });
   
-  // Add hover handlers for folders
   setupNestedFolderHandlers(popupElement, owner, repo, branch, basePath, 0);
 }
 
 async function handleHover(e, link) {
   const href = link.href;
 
-  // For non-folder items (files), we can use simple HTML cache
   if (cache.has(href) && !href.includes("/tree/")) {
     popup.innerHTML = cache.get(href);
     positionPopup(e);
@@ -918,6 +1093,53 @@ async function handleHover(e, link) {
     Loading…
   </div>
 `;
+
+  // PDF Preview Handler
+  if (isPDFFile(href)) {
+    popup.innerHTML = `
+      <div class="w-full flex flex-col items-center justify-center p-4 gap-2">
+        <div class="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
+        <span class="text-[11px] opacity-60">Loading PDF preview…</span>
+      </div>
+    `;
+
+    try {
+      const base64Data = await fetchPDFData(href);
+      
+      if (!popup) return;
+
+      const container = await createPDFPreview(base64Data, {
+        maxPages: 2,
+        scale: 1.2,
+        maxWidth: 380
+      });
+
+      if (!popup) return;
+      
+      popup.innerHTML = '';
+      popup.appendChild(container);
+
+    } catch (error) {
+      if (!popup) return;
+      
+      console.error('PDF preview error:', error);
+      popup.innerHTML = `
+        <div class="p-4 flex flex-col items-center gap-2">
+          <div class="text-2xl">📄</div>
+          <div class="text-[11px] opacity-60 text-center">
+            ${error.message === 'Extension context invalidated' 
+              ? 'Please refresh the page' 
+              : 'Unable to preview PDF'}
+          </div>
+          <a href="${href}" target="_blank" 
+             class="text-[10px] text-blue-400 hover:text-blue-300 underline mt-1">
+            Open in new tab
+          </a>
+        </div>
+      `;
+    }
+    return;
+  }
 
   if (isImageFile(href)) {
     const raw = buildRawUrl(href);
@@ -945,7 +1167,6 @@ async function handleHover(e, link) {
     const branch = parts[3];
     const path = parts.slice(4).join("/");
 
-    // Use deduped fetch to prevent multiple requests (also checks pageCache)
     const result = await fetchPageDeduped(owner, repo, branch, path);
 
     if (!popup) return;
@@ -997,8 +1218,6 @@ async function handleHover(e, link) {
     `;
 
     popup.innerHTML = html;
-    
-    // Always attach event handlers (this is the key fix!)
     attachFolderPopupHandlers(popup, pageData, owner, repo, branch, path);
     return;
   }
@@ -1051,7 +1270,6 @@ async function handleHover(e, link) {
   if (!popup) return;
   popup.innerHTML = html;
   
-  // Add click handler for "View more" button if truncated
   if (truncated) {
     const viewMoreBtn = popup.querySelector('.view-more-btn');
     if (viewMoreBtn) {
@@ -1064,10 +1282,14 @@ async function handleHover(e, link) {
     }
   }
   
-  Prism.highlightAllUnder(popup);
+  // ===== FIX #2: Added window.Prism check =====
+  if (window.Prism) {
+    Prism.highlightAllUnder(popup);
+  }
+  // ===== END FIX #2 =====
 }
 
-// mouse over
+// Event Listeners
 document.addEventListener("mouseover", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
   if (!link || link === lastTarget) return;
@@ -1079,7 +1301,6 @@ document.addEventListener("mouseover", (e) => {
     if (!popup) createPopup();
     positionPopup(e);
 
-    // wait one frame so initial styles apply
     requestAnimationFrame(() => {
       if (!popup) return;
       popup.classList.remove("opacity-0", "scale-[0.98]", "translate-y-1");
@@ -1090,11 +1311,9 @@ document.addEventListener("mouseover", (e) => {
   }, HOVER_DELAY);
 });
 
-// mouse out
 document.addEventListener("mouseout", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
 
-  // Only destroy if leaving both the link and popup
   if (link && link === lastTarget) {
     const relatedIsPopup = popup && popup.contains(e.relatedTarget);
     if (!relatedIsPopup) {

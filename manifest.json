@@ -1,41 +1,33 @@
 {
   "manifest_version": 3,
   "name": "Peek-a-Repo",
-  "description": "Hover to preview files, folders, and images on GitHub. Fast and efficient with smart caching.",
-  "version": "3.0.0",
-
-  "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
-
-  "permissions": ["storage", "identity"],
-
+  "version": "1.0.0",
+  "description": "Preview GitHub files on hover",
+  "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://github.com/*",
     "https://raw.githubusercontent.com/*",
     "https://api.github.com/*"
   ],
-
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
-
   "content_scripts": [
     {
       "matches": ["https://github.com/*"],
-      "js": ["prism/prism.js","content.js"],
-      "css": ["prism/prism.css","tailwind.css"],
-      "run_at": "document_idle"
+      "js": ["content.js"],
+      "css": ["tailwind.css"]
     }
   ],
-
-  "options_page": "options.html",
-  
-  "action": {
-    "default_title": "Peek-a-Repo Settings"
-  }
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pdf-viewer.html",
+        "pdf-viewer.js",
+        "lib/pdf.min.js",
+        "lib/pdf.worker.min.js"
+      ],
+      "matches": ["https://github.com/*"]
+    }
+  ]
 }

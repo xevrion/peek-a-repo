@@ -16,10 +16,11 @@ You open another file.
 You go back.  
 Again. And again.
 
-Now add images to the mix.
+Now add images to the mix, moreover a PDF is irritating
 
-You can’t even see what an image is unless you open it.  
-So you end up opening every single image, one by one, just to figure out which one you want.
+You can’t even see what an image is unless you open it. 
+You can't even guess what content the PDF has unless you see its abstract or conclusion by opening it.
+So you end up opening every single image, every single PDF one by one, just to figure out which one you want.
 
 This constant back-and-forth is frustrating.  
 Later I learned this behavior is called _pogo-sticking_ — but at that moment, it was just annoying.
@@ -38,6 +39,7 @@ What if you could just hover over a file in the GitHub file tree
 and instantly see what’s inside?
 
 - Image file → show an image preview
+- PDF file → show the rendered preview of the first pages
 - Code file → show the code (with syntax highlighting)
 - No clicking
 - No page navigation
@@ -55,6 +57,13 @@ Worth reading the [Wikipedia article](https://wikimediafoundation.org/news/2018/
   - Supports any aspect ratio
   - Images are scaled based on total resolution
 
+- **Hover previews for PDFs**
+
+  - Renders actual PDF pages (not just an icon)
+  - Shows first 1-2 pages as a preview
+  - Uses PDF.js for client-side rendering
+  - Bypasses GitHub's download headers via background script
+
 - **Hover previews for code files**
 
   - Fetches raw code using GitHub GraphQL API
@@ -68,6 +77,7 @@ Worth reading the [Wikipedia article](https://wikimediafoundation.org/news/2018/
 - **Smart caching**
 
   - Hovering the same file twice does not re-fetch data
+  - Works for images, PDFs, code files, and folders
 
 - **Privacy-first**
   - GitHub token is stored locally using `chrome.storage`
@@ -79,6 +89,7 @@ Worth reading the [Wikipedia article](https://wikimediafoundation.org/news/2018/
 
 - Hover over a file in a GitHub repository
 - Images are loaded instantly using GitHub raw URLs
+- PDFs are fetched via background script (to bypass GitHub's Content-Disposition headers) and rendered using PDF.js in an isolated iframe
 - Code files are fetched via the GitHub API and syntax-highlighted using Prism.js
 - Only the top part of the file is shown to keep previews fast and lightweight
 
