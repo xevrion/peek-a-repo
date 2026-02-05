@@ -466,6 +466,7 @@
       </div>
       
       <!-- Preview Settings Section -->
+      <div style="font-weight: bold; font-size:16px; text-align: center; margin-bottom: 12px;">Personalization</div>
       <div class="section">
         <div class="section-title">Preview Settings</div>
         <p class="note" style="margin-bottom: 12px;">Customize what previews appear on hover</p>
@@ -513,7 +514,7 @@
           <div class="setting-info">
             <div class="setting-label">Preview Delay</div>
             <div class="setting-description">Add a delay before previews appear</div>
-            <div class="delay-input-container nested-setting" id="delayInputContainer" style="display: none;">
+            <div class="delay-input-container" id="delayInputContainer" style="display: none;">
               <input type="number" id="delayInput" min="0" max="2000" step="50" value="0">
               <span class="delay-unit">ms</span>
               <span class="setting-description" style="margin-left: 8px;">(0 = instant, max 2000)</span>
@@ -529,7 +530,7 @@
           <div class="setting-info">
             <div class="setting-label">Require Modifier Key</div>
             <div class="setting-description">Hold a key while hovering to show previews</div>
-            <div class="shortcut-recorder nested-setting" id="shortcutRecorder" style="display: none;">
+            <div class="shortcut-recorder" id="shortcutRecorder" style="display: none;">
               <div class="shortcut-display" id="shortcutDisplay">None</div>
               <button class="record-btn" id="recordShortcut">Record</button>
               <button class="clear-shortcut-btn" id="clearShortcut" style="display: none;">Clear</button>

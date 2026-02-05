@@ -49,6 +49,7 @@ async function checkLoginStatus() {
 
 // Load all settings
 async function loadSettings() {
+  // const settings = null;
   const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
   
   enableImagePreviews.checked = settings.enableImagePreviews;
@@ -328,7 +329,7 @@ function stopRecording() {
   document.removeEventListener("keydown", handleRecordKeyDown, true);
   document.removeEventListener("keyup", handleRecordKeyUp, true);
   
-  // Re-enable all controls
+  // Re-enable all controls after recording is done
   disableAllControls(false);
 }
 
@@ -365,6 +366,7 @@ function handleRecordKeyUp(e) {
   }
 }
 
+// Disable or enable all controls except the record button so that user can't interact with them while recording
 function disableAllControls(disable) {
   const controls = [
     enableImagePreviews,
