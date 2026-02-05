@@ -235,12 +235,193 @@
       
       .divider::before { left: 0; }
       .divider::after { right: 0; }
+      
+      /* Toggle Switch Styles */
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(110, 118, 129, 0.4);
+        transition: 0.3s;
+        border-radius: 24px;
+        border: 1px solid rgba(240, 246, 252, 0.1);
+      }
+      
+      .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 2px;
+        bottom: 2px;
+        background-color: #e6edf3;
+        transition: 0.3s;
+        border-radius: 50%;
+      }
+      
+      input:checked + .toggle-slider {
+        background-color: #238636;
+        border-color: #2ea043;
+      }
+      
+      input:checked + .toggle-slider:before {
+        transform: translateX(20px);
+      }
+      
+      input:disabled + .toggle-slider {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      
+      .setting-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(240, 246, 252, 0.06);
+      }
+      
+      .setting-row:last-child {
+        border-bottom: none;
+      }
+      
+      .setting-info {
+        flex: 1;
+        margin-right: 16px;
+      }
+      
+      .setting-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: #e6edf3;
+        margin-bottom: 4px;
+      }
+      
+      .setting-description {
+        font-size: 12px;
+        color: #7d8590;
+        line-height: 1.4;
+      }
+      
+      .delay-input-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      
+      input[type="number"] {
+        width: 100px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(240, 246, 252, 0.1);
+        background: #0d1117;
+        color: #e6edf3;
+        font-size: 13px;
+        font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+      }
+      
+      input[type="number"]:focus {
+        outline: none;
+        border-color: #1f6feb;
+        box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+      }
+      
+      input[type="number"]:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      
+      .delay-unit {
+        font-size: 13px;
+        color: #7d8590;
+      }
+      
+      .shortcut-recorder {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      
+      .shortcut-display {
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(240, 246, 252, 0.1);
+        background: rgba(110, 118, 129, 0.1);
+        color: #e6edf3;
+        font-size: 13px;
+        font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+        min-width: 100px;
+        text-align: center;
+      }
+      
+      .shortcut-display.recording {
+        border-color: #1f6feb;
+        box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
+        animation: pulse 1.5s infinite;
+      }
+      
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+      
+      .record-btn {
+        padding: 5px 12px;
+        font-size: 12px;
+      }
+      
+      .record-btn.recording {
+        background: #da3633;
+        border-color: #da3633;
+        color: #ffffff;
+      }
+      
+      .record-btn.recording:hover {
+        background: #b22a26;
+      }
+      
+      .clear-shortcut-btn {
+        padding: 5px 12px;
+        font-size: 12px;
+        background: rgba(248, 81, 73, 0.15);
+        border-color: rgba(248, 81, 73, 0.4);
+        color: #f85149;
+      }
+      
+      .clear-shortcut-btn:hover {
+        background: rgba(248, 81, 73, 0.25);
+      }
+      
+      .nested-setting {
+        margin-left: 0;
+        padding-left: 16px;
+        border-left: 2px solid rgba(240, 246, 252, 0.1);
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <h1>Peek-a-Repo Settings</h1>
-      <p class="subtitle">Configure authentication to preview files and folders on GitHub</p>
+      <p class="subtitle">Configure authentication and preview behavior on GitHub</p>
       
       <div id="loggedInStatus" class="logged-in" style="display: none;">
         <div class="logged-in-title">✓ Connected to GitHub</div>
@@ -282,6 +463,83 @@
         <input id="token" type="password" placeholder="ghp_..." />
         <button id="save" class="primary-btn" style="margin-top: 12px;">Save token</button>
         <div id="tokenStatus" class="status"></div>
+      </div>
+      
+      <!-- Preview Settings Section -->
+      <div class="section">
+        <div class="section-title">Preview Settings</div>
+        <p class="note" style="margin-bottom: 12px;">Customize what previews appear on hover</p>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Image Previews</div>
+            <div class="setting-description">Show preview popups when hovering over image files</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="enableImagePreviews" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Code Previews</div>
+            <div class="setting-description">Show preview popups when hovering over code files</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="enableCodePreviews" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Folder Previews</div>
+            <div class="setting-description">Show preview popups when hovering over folders</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="enableFolderPreviews" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      
+      <!-- Hover Behavior Section -->
+      <div class="section">
+        <div class="section-title">Hover Behavior</div>
+        <p class="note" style="margin-bottom: 12px;">Control when and how previews appear</p>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Preview Delay</div>
+            <div class="setting-description">Add a delay before previews appear</div>
+            <div class="delay-input-container nested-setting" id="delayInputContainer" style="display: none;">
+              <input type="number" id="delayInput" min="0" max="2000" step="50" value="0">
+              <span class="delay-unit">ms</span>
+              <span class="setting-description" style="margin-left: 8px;">(0 = instant, max 2000)</span>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="enableDelay">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Require Modifier Key</div>
+            <div class="setting-description">Hold a key while hovering to show previews</div>
+            <div class="shortcut-recorder nested-setting" id="shortcutRecorder" style="display: none;">
+              <div class="shortcut-display" id="shortcutDisplay">None</div>
+              <button class="record-btn" id="recordShortcut">Record</button>
+              <button class="clear-shortcut-btn" id="clearShortcut" style="display: none;">Clear</button>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="enableModifierKey">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
     </div>
 

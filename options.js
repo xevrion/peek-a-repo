@@ -7,6 +7,33 @@ const tokenStatus = document.getElementById("tokenStatus");
 const loggedInStatus = document.getElementById("loggedInStatus");
 const loginSection = document.getElementById("loginSection");
 
+// Preview Settings
+const enableImagePreviews = document.getElementById("enableImagePreviews");
+const enableCodePreviews = document.getElementById("enableCodePreviews");
+const enableFolderPreviews = document.getElementById("enableFolderPreviews");
+const enableDelay = document.getElementById("enableDelay");
+const delayInput = document.getElementById("delayInput");
+const delayInputContainer = document.getElementById("delayInputContainer");
+const enableModifierKey = document.getElementById("enableModifierKey");
+const shortcutRecorder = document.getElementById("shortcutRecorder");
+const shortcutDisplay = document.getElementById("shortcutDisplay");
+const recordShortcut = document.getElementById("recordShortcut");
+const clearShortcut = document.getElementById("clearShortcut");
+
+let isRecording = false;
+let recordedKeys = null;
+
+// Default settings
+const DEFAULT_SETTINGS = {
+  enableImagePreviews: true,
+  enableCodePreviews: true,
+  enableFolderPreviews: true,
+  enableDelay: false,
+  previewDelay: 0,
+  enableModifierKey: false,
+  modifierKey: null
+};
+
 // Check if user is already logged in
 async function checkLoginStatus() {
   const { githubToken } = await chrome.storage.sync.get("githubToken");
@@ -20,10 +47,83 @@ async function checkLoginStatus() {
   return githubToken;
 }
 
+// Load all settings
+async function loadSettings() {
+  const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
+  
+  enableImagePreviews.checked = settings.enableImagePreviews;
+  enableCodePreviews.checked = settings.enableCodePreviews;
+  enableFolderPreviews.checked = settings.enableFolderPreviews;
+  enableDelay.checked = settings.enableDelay;
+  delayInput.value = settings.previewDelay;
+  delayInputContainer.style.display = settings.enableDelay ? "flex" : "none";
+  
+  enableModifierKey.checked = settings.enableModifierKey;
+  shortcutRecorder.style.display = settings.enableModifierKey ? "flex" : "none";
+  
+  if (settings.modifierKey) {
+    shortcutDisplay.textContent = formatShortcut(settings.modifierKey);
+    clearShortcut.style.display = "inline-block";
+  } else {
+    shortcutDisplay.textContent = "None";
+    clearShortcut.style.display = "none";
+  }
+}
+
+// Save settings
+async function saveSettings() {
+  const settings = {
+    enableImagePreviews: enableImagePreviews.checked,
+    enableCodePreviews: enableCodePreviews.checked,
+    enableFolderPreviews: enableFolderPreviews.checked,
+    enableDelay: enableDelay.checked,
+    previewDelay: parseInt(delayInput.value) || 0,
+    enableModifierKey: enableModifierKey.checked,
+    modifierKey: recordedKeys
+  };
+  
+  await chrome.storage.sync.set(settings);
+}
+
+// Format shortcut display
+function formatShortcut(keys) {
+  if (!keys) return "None";
+  
+  const parts = [];
+  if (keys.ctrl) parts.push("Ctrl");
+  if (keys.alt) parts.push("Alt");
+  if (keys.shift) parts.push("Shift");
+  if (keys.meta) parts.push("Meta");
+  if (keys.key && keys.key !== "Control" && keys.key !== "Alt" && keys.key !== "Shift" && keys.key !== "Meta") {
+    parts.push(keys.key.toUpperCase());
+  }
+  
+  return parts.join(" + ") || "None";
+}
+
+// Validate delay input
+function validateDelayInput() {
+  let value = parseInt(delayInput.value);
+  
+  // Handle invalid input
+  if (isNaN(value)) {
+    delayInput.value = 0;
+    return;
+  }
+  
+  // Clamp to valid range
+  if (value < 0) delayInput.value = 0;
+  if (value > 2000) delayInput.value = 2000;
+  
+  saveSettings();
+}
+
 // Initialize
 checkLoginStatus().then((token) => {
   if (token) input.value = token;
 });
+
+loadSettings();
 
 // OAuth Login
 oauthLoginBtn.addEventListener("click", async () => {
@@ -164,3 +264,122 @@ saveBtn.addEventListener("click", async () => {
     checkLoginStatus();
   }, 1000);
 });
+
+// Toggle switches event listeners
+enableImagePreviews.addEventListener("change", saveSettings);
+enableCodePreviews.addEventListener("change", saveSettings);
+enableFolderPreviews.addEventListener("change", saveSettings);
+
+// Delay toggle
+enableDelay.addEventListener("change", () => {
+  delayInputContainer.style.display = enableDelay.checked ? "flex" : "none";
+  saveSettings();
+});
+
+// Delay input
+delayInput.addEventListener("input", validateDelayInput);
+delayInput.addEventListener("blur", validateDelayInput);
+
+// Modifier key toggle
+enableModifierKey.addEventListener("change", () => {
+  shortcutRecorder.style.display = enableModifierKey.checked ? "flex" : "none";
+  saveSettings();
+});
+
+// Record shortcut
+recordShortcut.addEventListener("click", () => {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+});
+
+// Clear shortcut
+clearShortcut.addEventListener("click", () => {
+  recordedKeys = null;
+  shortcutDisplay.textContent = "None";
+  clearShortcut.style.display = "none";
+  saveSettings();
+});
+
+function startRecording() {
+  isRecording = true;
+  recordShortcut.textContent = "Press keys...";
+  recordShortcut.classList.add("recording");
+  shortcutDisplay.textContent = "Listening...";
+  shortcutDisplay.classList.add("recording");
+  
+  // Disable all other controls while recording
+  disableAllControls(true);
+  
+  // Add global keyboard listener
+  document.addEventListener("keydown", handleRecordKeyDown, true);
+  document.addEventListener("keyup", handleRecordKeyUp, true);
+}
+
+function stopRecording() {
+  isRecording = false;
+  recordShortcut.textContent = "Record";
+  recordShortcut.classList.remove("recording");
+  shortcutDisplay.classList.remove("recording");
+  
+  // Remove keyboard listeners
+  document.removeEventListener("keydown", handleRecordKeyDown, true);
+  document.removeEventListener("keyup", handleRecordKeyUp, true);
+  
+  // Re-enable all controls
+  disableAllControls(false);
+}
+
+function handleRecordKeyDown(e) {
+  if (!isRecording) return;
+  
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // Record the key combination
+  recordedKeys = {
+    ctrl: e.ctrlKey,
+    alt: e.altKey,
+    shift: e.shiftKey,
+    meta: e.metaKey,
+    key: e.key
+  };
+  
+  // Update display
+  shortcutDisplay.textContent = formatShortcut(recordedKeys);
+}
+
+function handleRecordKeyUp(e) {
+  if (!isRecording) return;
+  
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // Stop recording after key is released
+  if (recordedKeys) {
+    clearShortcut.style.display = "inline-block";
+    saveSettings();
+    stopRecording();
+  }
+}
+
+function disableAllControls(disable) {
+  const controls = [
+    enableImagePreviews,
+    enableCodePreviews,
+    enableFolderPreviews,
+    enableDelay,
+    delayInput,
+    enableModifierKey,
+    clearShortcut
+  ];
+  
+  controls.forEach(control => {
+    control.disabled = disable;
+  });
+  
+  // Don't disable the record button itself
+}
+

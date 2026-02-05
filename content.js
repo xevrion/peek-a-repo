@@ -13,6 +13,37 @@ let isPopupShown = false;
 let nestedPopups = []; // Array to track all nested popups
 let loginNotificationShown = false; // Track if we've shown the login notification
 
+// Settings with defaults
+let userSettings = {
+  enableImagePreviews: true,
+  enableCodePreviews: true,
+  enableFolderPreviews: true,
+  enableDelay: false,
+  previewDelay: 0,
+  enableModifierKey: false,
+  modifierKey: null
+};
+
+// Load settings from storage
+async function loadUserSettings() {
+  const settings = await chrome.storage.sync.get(userSettings);
+  userSettings = settings;
+}
+
+// Initialize settings
+loadUserSettings();
+
+// Listen for settings changes
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'sync') {
+    for (let key in changes) {
+      if (key in userSettings) {
+        userSettings[key] = changes[key].newValue;
+      }
+    }
+  }
+});
+
 // Error messages
 const ERROR_MESSAGES = {
   NO_TOKEN: "Please set your GitHub token in extension options.",
@@ -1077,8 +1108,36 @@ document.addEventListener("mouseover", (e) => {
   
   if (containsImage) return;
 
+  // Check if modifier key is required and pressed
+  if (userSettings.enableModifierKey && userSettings.modifierKey) {
+    const keys = userSettings.modifierKey;
+    let modifierPressed = true;
+    
+    // Check if any required modifier is pressed
+    if (keys.ctrl && !e.ctrlKey) modifierPressed = false;
+    if (keys.alt && !e.altKey) modifierPressed = false;
+    if (keys.shift && !e.shiftKey) modifierPressed = false;
+    if (keys.meta && !e.metaKey) modifierPressed = false;
+    
+    if (!modifierPressed) return;
+  }
+
+  // Determine content type
+  const href = link.href;
+  const isFolder = href.includes("/tree/");
+  const isImage = isImageFile(href);
+  const isCode = !isFolder && !isImage;
+
+  // Check if this type of preview is enabled
+  if (isFolder && !userSettings.enableFolderPreviews) return;
+  if (isImage && !userSettings.enableImagePreviews) return;
+  if (isCode && !userSettings.enableCodePreviews) return;
+
   lastTarget = link;
   clearTimeout(hoverTimer);
+
+  // Use custom delay if enabled, otherwise use default
+  const delay = userSettings.enableDelay ? userSettings.previewDelay : HOVER_DELAY;
 
   hoverTimer = setTimeout(() => {
     if (!popup) createPopup();
@@ -1092,7 +1151,7 @@ document.addEventListener("mouseover", (e) => {
     });
 
     handleHover(e, link);
-  }, HOVER_DELAY);
+  }, delay);
 });
 
 // mouse out
