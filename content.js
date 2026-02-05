@@ -1133,6 +1133,14 @@ document.addEventListener("mouseover", (e) => {
   if (isImage && !userSettings.enableImagePreviews) return;
   if (isCode && !userSettings.enableCodePreviews) return;
 
+  // Hide GitHub's default tooltip to prevent it from overlapping with our popup
+  const tooltip = link.getAttribute('title') || link.getAttribute('aria-label');
+  if (tooltip) {
+    link.setAttribute('data-original-title', tooltip); // this will remove any tooltip because it always appears and stops us from looking at the popup properly
+    link.removeAttribute('title');
+    link.removeAttribute('aria-label');
+  }
+
   lastTarget = link;
   clearTimeout(hoverTimer);
 
