@@ -1072,6 +1072,11 @@ document.addEventListener("mouseover", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
   if (!link || link === lastTarget) return;
 
+  // Skip if link contains an image (rendered images in markdown files) so this prevents showing popups for already-visible images but still allows popups for image files in the tree view
+  const containsImage = link.querySelector('img') !== null;
+  
+  if (containsImage) return;
+
   lastTarget = link;
   clearTimeout(hoverTimer);
 
