@@ -1101,7 +1101,7 @@ async function handleHover(e, link) {
 // mouse over
 document.addEventListener("mouseover", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
-  if (!link || link === lastTarget) return;
+  if (!link) return;
 
   // Skip if link contains an image (rendered images in markdown files) so this prevents showing popups for already-visible images but still allows popups for image files in the tree view
   const containsImage = link.querySelector('img') !== null;
@@ -1133,21 +1133,30 @@ document.addEventListener("mouseover", (e) => {
   if (isImage && !userSettings.enableImagePreviews) return;
   if (isCode && !userSettings.enableCodePreviews) return;
 
+  // If hovering over a different link, destroy existing popup and cancel timer
+  if (link !== lastTarget) {
+    clearTimeout(hoverTimer);
+    if (popup) {
+      destroyPopup();
+    }
+    lastTarget = link;
+  }
+
   // Hide GitHub's default tooltip to prevent it from overlapping with our popup
   const tooltip = link.getAttribute('title') || link.getAttribute('aria-label');
   if (tooltip) {
-    link.setAttribute('data-original-title', tooltip); // this will remove any tooltip because it always appears and stops us from looking at the popup properly
+    link.setAttribute('data-original-title', tooltip);
     link.removeAttribute('title');
     link.removeAttribute('aria-label');
   }
-
-  lastTarget = link;
-  clearTimeout(hoverTimer);
 
   // Use custom delay if enabled, otherwise use default
   const delay = userSettings.enableDelay ? userSettings.previewDelay : HOVER_DELAY;
 
   hoverTimer = setTimeout(() => {
+    // Only show popup if still hovering over the same link
+    if (lastTarget !== link) return;
+    
     if (!popup) createPopup();
     positionPopup(e);
 
@@ -1166,18 +1175,25 @@ document.addEventListener("mouseover", (e) => {
 document.addEventListener("mouseout", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
 
-  // Only destroy if leaving both the link and popup
+  // Clear timer and reset when leaving a link
   if (link && link === lastTarget) {
     const relatedIsPopup = popup && popup.contains(e.relatedTarget);
     if (!relatedIsPopup) {
-      hoverTimer = setTimeout(() => {
-        if (!isPopupShown || (popup && !popup.matches(":hover"))) {
-          clearTimeout(hoverTimer);
-          unlockBodyScroll();
-          destroyPopup();
-          lastTarget = null;
-        }
-      }, 100);
+      clearTimeout(hoverTimer);
+      
+      // If popup exists, give a small grace period before destroying
+      if (popup) {
+        hoverTimer = setTimeout(() => {
+          if (!isPopupShown || (popup && !popup.matches(":hover"))) {
+            unlockBodyScroll();
+            destroyPopup();
+            lastTarget = null;
+          }
+        }, 100);
+      } else {
+        // No popup exists yet, just reset
+        lastTarget = null;
+      }
     }
   }
 });
