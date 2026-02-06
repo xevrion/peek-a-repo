@@ -461,6 +461,9 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
           
           // Check if it's an image file
           if (isImageFile(fileName)) {
+            // Check if image previews are enabled
+            if (!userSettings.enableImagePreviews) return;
+            
             const rect = fileEl.getBoundingClientRect();
             const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
             
@@ -507,6 +510,9 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
           }
           
           if (fileContent) {
+            // Check if code previews are enabled
+            if (!userSettings.enableCodePreviews) return;
+            
             // Create preview popup for file
             const rect = fileEl.getBoundingClientRect();
             const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
@@ -802,6 +808,9 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
       
       // Check if it's an image file
       if (isImageFile(fileName)) {
+        // Check if image previews are enabled
+        if (!userSettings.enableImagePreviews) return;
+        
         const rect = fileElement.getBoundingClientRect();
         const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
         
@@ -848,6 +857,9 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
       }
       
       if (fileContent) {
+        // Check if code previews are enabled
+        if (!userSettings.enableCodePreviews) return;
+        
         // Create preview popup for file
         const rect = fileElement.getBoundingClientRect();
         const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
