@@ -137,3 +137,15 @@ This project started from a real problem I faced.
 I couldn’t find an existing solution, so I built one.
 
 Simple as that.
+
+---
+
+## Contributing
+Contributions are welcome!
+Feel free to open issues or pull requests.
+Read the [contributing guide](CONTRIBUTING.md) for more details.
+
+---
+
+## Star History
+[![Star History Chart](https://api.star-history.com/svg?repos=xevrion/peek-a-repo&type=date&legend=top-left)](https://www.star-history.com/#xevrion/peek-a-repo&type=date&legend=top-left)
