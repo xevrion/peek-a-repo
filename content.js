@@ -9,9 +9,41 @@ const pendingRequests = new Map(); // Track in-flight requests to prevent duplic
 let hoverTimer = null;
 let popup = null;
 let lastTarget = null;
+let currentRequestId = 0; // Track current request to ignore stale responses
 let isPopupShown = false;
 let nestedPopups = []; // Array to track all nested popups
 let loginNotificationShown = false; // Track if we've shown the login notification
+
+// Settings with defaults
+let userSettings = {
+  enableImagePreviews: true,
+  enableCodePreviews: true,
+  enableFolderPreviews: true,
+  enableDelay: false,
+  previewDelay: 0,
+  enableModifierKey: false,
+  modifierKey: null
+};
+
+// Load settings from storage
+async function loadUserSettings() {
+  const settings = await chrome.storage.sync.get(userSettings);
+  userSettings = settings;
+}
+
+// Initialize settings
+loadUserSettings();
+
+// Listen for settings changes
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'sync') {
+    for (let key in changes) {
+      if (key in userSettings) {
+        userSettings[key] = changes[key].newValue;
+      }
+    }
+  }
+});
 
 // Error messages
 const ERROR_MESSAGES = {
@@ -429,6 +461,9 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
           
           // Check if it's an image file
           if (isImageFile(fileName)) {
+            // Check if image previews are enabled
+            if (!userSettings.enableImagePreviews) return;
+            
             const rect = fileEl.getBoundingClientRect();
             const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
             
@@ -475,6 +510,9 @@ async function setupNestedFolderHandlers(parentElement, owner, repo, branch, bas
           }
           
           if (fileContent) {
+            // Check if code previews are enabled
+            if (!userSettings.enableCodePreviews) return;
+            
             // Create preview popup for file
             const rect = fileEl.getBoundingClientRect();
             const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
@@ -770,6 +808,9 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
       
       // Check if it's an image file
       if (isImageFile(fileName)) {
+        // Check if image previews are enabled
+        if (!userSettings.enableImagePreviews) return;
+        
         const rect = fileElement.getBoundingClientRect();
         const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
         
@@ -816,6 +857,9 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
       }
       
       if (fileContent) {
+        // Check if code previews are enabled
+        if (!userSettings.enableCodePreviews) return;
+        
         // Create preview popup for file
         const rect = fileElement.getBoundingClientRect();
         const availableWidth = window.innerWidth - rect.right - POPUP_GAP - 20;
@@ -900,9 +944,13 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
 
 async function handleHover(e, link) {
   const href = link.href;
+  const requestId = ++currentRequestId; // Assign unique ID to this request
 
   // For non-folder items (files), we can use simple HTML cache
   if (cache.has(href) && !href.includes("/tree/")) {
+    // Check if this request is still current
+    if (requestId !== currentRequestId) return;
+    
     popup.innerHTML = cache.get(href);
     positionPopup(e);
 
@@ -931,7 +979,8 @@ async function handleHover(e, link) {
     const img = popup.querySelector("#peek-img");
 
     img.onload = () => {
-      if (!popup) return;
+      // Check if this request is still current before caching
+      if (!popup || requestId !== currentRequestId) return;
       cache.set(href, popup.innerHTML);
     };
     return;
@@ -948,7 +997,8 @@ async function handleHover(e, link) {
     // Use deduped fetch to prevent multiple requests (also checks pageCache)
     const result = await fetchPageDeduped(owner, repo, branch, path);
 
-    if (!popup) return;
+    // Check if this request is still current
+    if (!popup || requestId !== currentRequestId) return;
 
     if (result?.error) {
       popup.innerHTML = `
@@ -1015,7 +1065,9 @@ async function handleHover(e, link) {
     branch,
     path,
   });
-  if (!popup) return;
+  
+  // Check if this request is still current
+  if (!popup || requestId !== currentRequestId) return;
 
   if (res?.error) {
     popup.innerHTML = `
@@ -1048,7 +1100,10 @@ async function handleHover(e, link) {
 `;
 
   cache.set(href, html);
-  if (!popup) return;
+  
+  // Final check before updating DOM
+  if (!popup || requestId !== currentRequestId) return;
+  
   popup.innerHTML = html;
   
   // Add click handler for "View more" button if truncated
@@ -1070,17 +1125,62 @@ async function handleHover(e, link) {
 // mouse over
 document.addEventListener("mouseover", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
-  if (!link || link === lastTarget) return;
+  if (!link) return;
 
   // Skip if link contains an image (rendered images in markdown files) so this prevents showing popups for already-visible images but still allows popups for image files in the tree view
   const containsImage = link.querySelector('img') !== null;
   
   if (containsImage) return;
 
-  lastTarget = link;
-  clearTimeout(hoverTimer);
+  // Check if modifier key is required and pressed
+  if (userSettings.enableModifierKey && userSettings.modifierKey) {
+    const keys = userSettings.modifierKey;
+    let modifierPressed = true;
+    
+    // Check if any required modifier is pressed
+    if (keys.ctrl && !e.ctrlKey) modifierPressed = false;
+    if (keys.alt && !e.altKey) modifierPressed = false;
+    if (keys.shift && !e.shiftKey) modifierPressed = false;
+    if (keys.meta && !e.metaKey) modifierPressed = false;
+    
+    if (!modifierPressed) return;
+  }
+
+  // Determine content type
+  const href = link.href;
+  const isFolder = href.includes("/tree/");
+  const isImage = isImageFile(href);
+  const isCode = !isFolder && !isImage;
+
+  // Check if this type of preview is enabled
+  if (isFolder && !userSettings.enableFolderPreviews) return;
+  if (isImage && !userSettings.enableImagePreviews) return;
+  if (isCode && !userSettings.enableCodePreviews) return;
+
+  // If hovering over a different link, destroy existing popup and cancel timer
+  if (link !== lastTarget) {
+    clearTimeout(hoverTimer);
+    if (popup) {
+      destroyPopup();
+    }
+    lastTarget = link;
+  }
+
+  // Hide GitHub's default tooltip to prevent it from overlapping with our popup
+  const tooltip = link.getAttribute('title') || link.getAttribute('aria-label');
+  if (tooltip) {
+    link.setAttribute('data-original-title', tooltip);
+    link.removeAttribute('title');
+    link.removeAttribute('aria-label');
+  }
+
+  // Use custom delay if enabled, otherwise use default
+  const delay = userSettings.enableDelay ? userSettings.previewDelay : HOVER_DELAY;
 
   hoverTimer = setTimeout(() => {
+    // Only show popup if still hovering over the same link
+    if (lastTarget !== link) return;
+    
     if (!popup) createPopup();
     positionPopup(e);
 
@@ -1092,25 +1192,32 @@ document.addEventListener("mouseover", (e) => {
     });
 
     handleHover(e, link);
-  }, HOVER_DELAY);
+  }, delay);
 });
 
 // mouse out
 document.addEventListener("mouseout", (e) => {
   const link = e.target.closest('a[href*="/blob/"], a[href*="/tree/"]');
 
-  // Only destroy if leaving both the link and popup
+  // Clear timer and reset when leaving a link
   if (link && link === lastTarget) {
     const relatedIsPopup = popup && popup.contains(e.relatedTarget);
     if (!relatedIsPopup) {
-      hoverTimer = setTimeout(() => {
-        if (!isPopupShown || (popup && !popup.matches(":hover"))) {
-          clearTimeout(hoverTimer);
-          unlockBodyScroll();
-          destroyPopup();
-          lastTarget = null;
-        }
-      }, 100);
+      clearTimeout(hoverTimer);
+      
+      // If popup exists, give a small grace period before destroying
+      if (popup) {
+        hoverTimer = setTimeout(() => {
+          if (!isPopupShown || (popup && !popup.matches(":hover"))) {
+            unlockBodyScroll();
+            destroyPopup();
+            lastTarget = null;
+          }
+        }, 100);
+      } else {
+        // No popup exists yet, just reset
+        lastTarget = null;
+      }
     }
   }
 });
