@@ -17,10 +17,9 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 // Handle OAuth flow
-async function initiateGitHubOAuth() {
+async function initiateGitHubOAuth(scopes = "read:user") {
   const redirectURL = chrome.identity.getRedirectURL();
   const clientId = GITHUB_CLIENT_ID;
-  const scopes = "read:user";
   
   const authURL = new URL(GITHUB_AUTHORIZE_URL)
   url.searchParams.set("client_id", GITHUB_CLIENT_ID);
@@ -82,7 +81,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   
   if (msg.type === "OAUTH_LOGIN") {
-    initiateGitHubOAuth()
+    initiateGitHubOAuth(msg.scope)
       .then((result) => sendResponse({ success: true, ...result }))
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;

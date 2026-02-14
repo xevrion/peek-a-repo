@@ -121,12 +121,104 @@ function validateDelayInput() {
   saveSettings();
 }
 
-// Initialize
-checkLoginStatus().then((token) => {
-  if (token) input.value = token;
-});
+async function init() {
+	try {
+		const token = await checkLoginStatus();
+		if (token) {
+			input.value = token;
+		}
+		await loadSettings();
+		await restoreDeviceFlowState();
+	} catch (error) {
+		console.error("Initialization error:", error);
+	}
+}
 
-loadSettings();
+init();
+
+async function pollForToken(deviceCode, pollInterval, expiresAt) {
+	if (Date.now() > expiresAt) {
+		await chrome.storage.sync.remove("deviceFlowState");
+		oauthStatus.textContent = "Authorization expired. Please try again.";
+		oauthStatus.classList.remove("success");
+		oauthStatus.classList.add("show", "error");
+		oauthLoginBtn.disabled = false;
+		oauthLoginBtn.textContent = "Sign in with GitHub";
+		return;
+	}
+
+	try {
+		const tokenResponse = await fetch(GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL, {
+			method: "POST",
+			headers: {
+				"Accept": "application/json",
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				client_id: GITHUB_CLIENT_ID,
+				device_code: deviceCode,
+				grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+			}),
+		});
+
+		const tokenData = await tokenResponse.json();
+
+		if (tokenData.error === "authorization_pending") {
+			setTimeout(() => pollForToken(deviceCode, pollInterval, expiresAt), pollInterval);
+			return;
+		}
+
+		if (tokenData.error === "slow_down") {
+			setTimeout(() => pollForToken(deviceCode, pollInterval + 5000, expiresAt), pollInterval + 5000);
+			return;
+		}
+
+		if (tokenData.error) {
+			throw new Error(tokenData.error_description || tokenData.error);
+		}
+
+		if (tokenData.access_token) {
+			await chrome.storage.sync.set({ githubToken: tokenData.access_token });
+			await chrome.storage.sync.remove("deviceFlowState");
+
+			oauthStatus.textContent = "Successfully connected to GitHub!";
+			oauthStatus.classList.remove("error");
+			oauthStatus.classList.add("show", "success");
+
+			setTimeout(() => {
+				checkLoginStatus();
+				oauthLoginBtn.disabled = false;
+				oauthLoginBtn.textContent = "Sign in with GitHub";
+			}, 1500);
+		}
+	} catch (error) {
+		await chrome.storage.sync.remove("deviceFlowState");
+		oauthStatus.textContent = `Error: ${error.message}`;
+		oauthStatus.classList.remove("success");
+		oauthStatus.classList.add("show", "error");
+		oauthLoginBtn.disabled = false;
+		oauthLoginBtn.textContent = "Sign in with GitHub";
+	}
+}
+
+async function restoreDeviceFlowState() {
+	const { deviceFlowState } = await chrome.storage.sync.get("deviceFlowState");
+
+	if (!deviceFlowState) return;
+
+	if (Date.now() > deviceFlowState.expires_at) {
+		await chrome.storage.sync.remove("deviceFlowState");
+		return;
+	}
+
+	oauthStatus.textContent = `Enter this code: ${deviceFlowState.user_code}`;
+	oauthStatus.classList.add("show", "success");
+	oauthLoginBtn.textContent = "Waiting for authorization...";
+	oauthLoginBtn.disabled = true;
+
+	const pollInterval = (deviceFlowState.interval || 5) * 1000;
+	pollForToken(deviceFlowState.device_code, pollInterval, deviceFlowState.expires_at);
+}
 
 // OAuth Login
 oauthLoginBtn.addEventListener("click", async () => {
@@ -162,74 +254,27 @@ oauthLoginBtn.addEventListener("click", async () => {
       throw new Error(deviceData.error_description || "Failed to initiate OAuth");
     }
 
-    // Step 2: Open GitHub authorization page
-    window.open(deviceData.verification_uri, "_blank");
-    
-    // Show user code
-    oauthStatus.textContent = `Enter this code: ${deviceData.user_code}`;
-    oauthStatus.classList.add("show", "success");
-    oauthLoginBtn.textContent = "Waiting for authorization...";
-
-    // Step 3: Poll for access token
-    const pollInterval = (deviceData.interval || 5) * 1000;
     const expiresAt = Date.now() + deviceData.expires_in * 1000;
+		await chrome.storage.sync.set({
+			deviceFlowState: {
+				user_code: deviceData.user_code,
+				device_code: deviceData.device_code,
+				verification_uri: deviceData.verification_uri,
+				expires_at: expiresAt,
+				interval: deviceData.interval || 5,
+			},
+		});
 
-    const pollForToken = async () => {
-      if (Date.now() > expiresAt) {
-        throw new Error("Authorization expired. Please try again.");
-      }
+    chrome.tabs.create({ url: deviceData.verification_uri });
 
-      const tokenResponse = await fetch(GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL, {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          client_id: GITHUB_CLIENT_ID,
-          device_code: deviceData.device_code,
-          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        }),
-      });
+		oauthStatus.textContent = `Enter this code: ${deviceData.user_code}`;
+		oauthStatus.classList.add("show", "success");
+		oauthLoginBtn.textContent = "Waiting for authorization...";
 
-      const tokenData = await tokenResponse.json();
-
-      if (tokenData.error === "authorization_pending") {
-        // Still waiting, poll again
-        setTimeout(pollForToken, pollInterval);
-        return;
-      }
-
-      if (tokenData.error === "slow_down") {
-        // Slow down polling
-        setTimeout(pollForToken, pollInterval + 5000);
-        return;
-      }
-
-      if (tokenData.error) {
-        throw new Error(tokenData.error_description || tokenData.error);
-      }
-
-      if (tokenData.access_token) {
-        // Success! Save the token
-        await chrome.storage.sync.set({ githubToken: tokenData.access_token });
-        
-        oauthStatus.textContent = "✓ Successfully connected to GitHub!";
-        oauthStatus.classList.remove("error");
-        oauthStatus.classList.add("show", "success");
-        
-        setTimeout(() => {
-          checkLoginStatus();
-          oauthLoginBtn.disabled = false;
-          oauthLoginBtn.textContent = "Sign in with GitHub";
-        }, 1500);
-      }
-    };
-
-    // Start polling
-    setTimeout(pollForToken, pollInterval);
-
+		const pollInterval = (deviceData.interval || 5) * 1000;
+		pollForToken(deviceData.device_code, pollInterval, expiresAt);
   } catch (error) {
+    await chrome.storage.sync.remove("deviceFlowState");
     oauthStatus.textContent = `Error: ${error.message}`;
     oauthStatus.classList.remove("success");
     oauthStatus.classList.add("show", "error");
