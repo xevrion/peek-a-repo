@@ -942,12 +942,37 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
   setupNestedFolderHandlers(popupElement, owner, repo, branch, basePath, 0);
 }
 
+function getUrlInfo(href) {
+  try {
+    const url = new URL(href);
+    const parts = url.pathname.split("/").filter(Boolean);
+    
+    // GitHub URL structure: /owner/repo/type/branch/path
+    // parts[0] = owner, parts[1] = repo, parts[2] = type (blob/tree), parts[3] = branch
+    
+    const owner = parts[0];
+    const repo = parts[1];
+    const type = parts[2];
+    const branch = parts[3];
+    const path = parts.slice(4).join("/");
+    
+    return { owner, repo, type, branch, path };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function handleHover(e, link) {
   const href = link.href;
   const requestId = ++currentRequestId; // Assign unique ID to this request
 
+  const urlInfo = getUrlInfo(href);
+  if (!urlInfo) return;
+  const { owner, repo, branch, path, type } = urlInfo;
+  const isFolder = type === "tree";
+
   // For non-folder items (files), we can use simple HTML cache
-  if (cache.has(href) && !href.includes("/tree/")) {
+  if (cache.has(href) && !isFolder) {
     // Check if this request is still current
     if (requestId !== currentRequestId) return;
     
@@ -986,14 +1011,7 @@ async function handleHover(e, link) {
     return;
   }
 
-  const isFolder = href.includes("/tree/");
-
   if (isFolder) {
-    const { owner, repo } = getRepoInfo();
-    const parts = new URL(href).pathname.split("/").filter(Boolean);
-    const branch = parts[3];
-    const path = parts.slice(4).join("/");
-
     // Use deduped fetch to prevent multiple requests (also checks pageCache)
     const result = await fetchPageDeduped(owner, repo, branch, path);
 
@@ -1052,11 +1070,6 @@ async function handleHover(e, link) {
     attachFolderPopupHandlers(popup, pageData, owner, repo, branch, path);
     return;
   }
-
-  const { owner, repo } = getRepoInfo();
-  const parts = new URL(href).pathname.split("/").filter(Boolean);
-  const branch = parts[3];
-  const path = parts.slice(4).join("/");
 
   const res = await fetchViaBackground({
     type: "FETCH_FILE",
