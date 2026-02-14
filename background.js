@@ -1,4 +1,4 @@
-import { GITHUB_API, GITHUB_CLIENT_ID, GITHUB_AUTHORIZE_URL } from "./consts";
+import { GITHUB_API, GITHUB_CLIENT_ID, GITHUB_AUTHORIZE_URL } from "./consts.js";
 
 // Open options page when extension icon is clicked
 chrome.action.onClicked.addListener(() => {
@@ -22,9 +22,9 @@ async function initiateGitHubOAuth(scopes = "read:user") {
   const clientId = GITHUB_CLIENT_ID;
   
   const authURL = new URL(GITHUB_AUTHORIZE_URL)
-  url.searchParams.set("client_id", GITHUB_CLIENT_ID);
-  url.searchParams.set("redirect_uri", redirectURL);
-  url.searchParams.set("scope", scopes);
+  authURL.searchParams.set("client_id", GITHUB_CLIENT_ID);
+  authURL.searchParams.set("redirect_uri", redirectURL);
+  authURL.searchParams.set("scope", scopes);
   
   return new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow(
