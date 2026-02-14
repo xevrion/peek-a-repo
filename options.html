@@ -9,33 +9,32 @@
         padding: 0;
         box-sizing: border-box;
       }
-      
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
         background: #0d1117;
+        padding: 25px 30px;
         color: #e6edf3;
-        padding: 32px 24px;
-        min-height: 100vh;
+        min-width: 400px;
       }
-      
+
       .container {
-        max-width: 600px;
         margin: 0 auto;
       }
-      
+
       h1 {
         font-size: 24px;
         font-weight: 600;
         margin-bottom: 8px;
         color: #e6edf3;
       }
-      
+
       .subtitle {
         font-size: 14px;
         color: #7d8590;
         margin-bottom: 32px;
       }
-      
+
       .section {
         background: rgba(20, 20, 30, 0.5);
         border: 1px solid rgba(240, 246, 252, 0.1);
@@ -43,14 +42,14 @@
         padding: 16px;
         margin-bottom: 16px;
       }
-      
+
       .section-title {
         font-size: 14px;
         font-weight: 600;
         margin-bottom: 12px;
         color: #e6edf3;
       }
-      
+
       .status {
         padding: 12px;
         border-radius: 6px;
@@ -58,23 +57,23 @@
         display: none;
         font-size: 13px;
       }
-      
+
       .status.success {
         background: rgba(46, 160, 67, 0.15);
         border: 1px solid rgba(46, 160, 67, 0.4);
         color: #3fb950;
       }
-      
+
       .status.error {
         background: rgba(248, 81, 73, 0.15);
         border: 1px solid rgba(248, 81, 73, 0.4);
         color: #f85149;
       }
-      
+
       .status.show {
         display: block;
       }
-      
+
       .logged-in {
         background: rgba(46, 160, 67, 0.15);
         border: 1px solid rgba(46, 160, 67, 0.4);
@@ -82,20 +81,20 @@
         border-radius: 6px;
         margin-bottom: 16px;
       }
-      
+
       .logged-in-title {
         font-size: 14px;
         font-weight: 600;
         color: #3fb950;
         margin-bottom: 8px;
       }
-      
+
       .logged-in-text {
         font-size: 13px;
         color: #7d8590;
         margin-bottom: 12px;
       }
-      
+
       input[type="password"] {
         width: 100%;
         padding: 8px 12px;
@@ -107,13 +106,13 @@
         margin-top: 8px;
         font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
       }
-      
+
       input[type="password"]:focus {
         outline: none;
         border-color: #1f6feb;
         box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
       }
-      
+
       button {
         padding: 5px 16px;
         border-radius: 6px;
@@ -125,58 +124,58 @@
         font-weight: 500;
         transition: all 0.2s;
       }
-      
+
       button:hover {
         background: rgba(240, 246, 252, 0.1);
         border-color: rgba(240, 246, 252, 0.2);
       }
-      
+
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
-      
+
       button:disabled:hover {
         background: rgba(240, 246, 252, 0.05);
         border-color: rgba(240, 246, 252, 0.1);
       }
-      
+
       .primary-btn {
         background: #238636;
         border-color: rgba(240, 246, 252, 0.1);
         color: #ffffff;
       }
-      
+
       .primary-btn:hover {
         background: #2ea043;
       }
-      
+
       .danger-btn {
         background: rgba(248, 81, 73, 0.15);
         border-color: rgba(248, 81, 73, 0.4);
         color: #f85149;
       }
-      
+
       .danger-btn:hover {
         background: rgba(248, 81, 73, 0.25);
       }
-      
+
       .note {
         font-size: 12px;
         color: #7d8590;
         margin-top: 8px;
         line-height: 1.5;
       }
-      
+
       .note a {
         color: #58a6ff;
         text-decoration: none;
       }
-      
+
       .note a:hover {
         text-decoration: underline;
       }
-      
+
       .checkbox-container {
         background: rgba(240, 246, 252, 0.03);
         border: 1px solid rgba(240, 246, 252, 0.1);
@@ -184,29 +183,29 @@
         padding: 12px;
         margin: 12px 0;
       }
-      
+
       .checkbox-label {
         display: flex;
         align-items: flex-start;
         cursor: pointer;
       }
-      
+
       input[type="checkbox"] {
         margin: 3px 10px 0 0;
         cursor: pointer;
         width: 16px;
         height: 16px;
       }
-      
+
       .checkbox-content strong {
         color: #e6edf3;
         font-size: 13px;
       }
-      
+
       .checkbox-content .note {
         margin-top: 4px;
       }
-      
+
       code {
         background: rgba(110, 118, 129, 0.2);
         padding: 2px 6px;
@@ -214,7 +213,7 @@
         font-size: 11px;
         font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
       }
-      
+
       .divider {
         text-align: center;
         margin: 24px 0;
@@ -222,7 +221,7 @@
         font-size: 12px;
         position: relative;
       }
-      
+
       .divider::before,
       .divider::after {
         content: "";
@@ -232,10 +231,10 @@
         height: 1px;
         background: rgba(240, 246, 252, 0.1);
       }
-      
+
       .divider::before { left: 0; }
       .divider::after { right: 0; }
-      
+
       /* Toggle Switch Styles */
       .toggle-switch {
         position: relative;
@@ -244,13 +243,13 @@
         height: 24px;
         flex-shrink: 0;
       }
-      
+
       .toggle-switch input {
         opacity: 0;
         width: 0;
         height: 0;
       }
-      
+
       .toggle-slider {
         position: absolute;
         cursor: pointer;
@@ -263,7 +262,7 @@
         border-radius: 24px;
         border: 1px solid rgba(240, 246, 252, 0.1);
       }
-      
+
       .toggle-slider:before {
         position: absolute;
         content: "";
@@ -275,21 +274,21 @@
         transition: 0.3s;
         border-radius: 50%;
       }
-      
+
       input:checked + .toggle-slider {
         background-color: #238636;
         border-color: #2ea043;
       }
-      
+
       input:checked + .toggle-slider:before {
         transform: translateX(20px);
       }
-      
+
       input:disabled + .toggle-slider {
         opacity: 0.5;
         cursor: not-allowed;
       }
-      
+
       .setting-row {
         display: flex;
         align-items: center;
@@ -297,36 +296,36 @@
         padding: 12px 0;
         border-bottom: 1px solid rgba(240, 246, 252, 0.06);
       }
-      
+
       .setting-row:last-child {
         border-bottom: none;
       }
-      
+
       .setting-info {
         flex: 1;
         margin-right: 16px;
       }
-      
+
       .setting-label {
         font-size: 14px;
         font-weight: 500;
         color: #e6edf3;
         margin-bottom: 4px;
       }
-      
+
       .setting-description {
         font-size: 12px;
         color: #7d8590;
         line-height: 1.4;
       }
-      
+
       .delay-input-container {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-top: 8px;
       }
-      
+
       input[type="number"] {
         width: 100px;
         padding: 6px 10px;
@@ -337,30 +336,30 @@
         font-size: 13px;
         font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
       }
-      
+
       input[type="number"]:focus {
         outline: none;
         border-color: #1f6feb;
         box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
       }
-      
+
       input[type="number"]:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
-      
+
       .delay-unit {
         font-size: 13px;
         color: #7d8590;
       }
-      
+
       .shortcut-recorder {
         display: flex;
         align-items: center;
         gap: 8px;
         margin-top: 8px;
       }
-      
+
       .shortcut-display {
         padding: 6px 12px;
         border-radius: 6px;
@@ -372,33 +371,33 @@
         min-width: 100px;
         text-align: center;
       }
-      
+
       .shortcut-display.recording {
         border-color: #1f6feb;
         box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.3);
         animation: pulse 1.5s infinite;
       }
-      
+
       @keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.7; }
       }
-      
+
       .record-btn {
         padding: 5px 12px;
         font-size: 12px;
       }
-      
+
       .record-btn.recording {
         background: #da3633;
         border-color: #da3633;
         color: #ffffff;
       }
-      
+
       .record-btn.recording:hover {
         background: #b22a26;
       }
-      
+
       .clear-shortcut-btn {
         padding: 5px 12px;
         font-size: 12px;
@@ -406,11 +405,11 @@
         border-color: rgba(248, 81, 73, 0.4);
         color: #f85149;
       }
-      
+
       .clear-shortcut-btn:hover {
         background: rgba(248, 81, 73, 0.25);
       }
-      
+
       .nested-setting {
         margin-left: 0;
         padding-left: 16px;
@@ -422,18 +421,18 @@
     <div class="container">
       <h1>Peek-a-Repo Settings</h1>
       <p class="subtitle">Configure authentication and preview behavior on GitHub</p>
-      
+
       <div id="loggedInStatus" class="logged-in" style="display: none;">
         <div class="logged-in-title">✓ Connected to GitHub</div>
         <p class="logged-in-text">You're all set! The extension is ready to use.</p>
         <button id="logout" class="danger-btn">Sign out</button>
       </div>
-      
+
       <div id="loginSection">
         <div class="section">
           <div class="section-title">GitHub OAuth</div>
           <p class="note">Recommended method for easy authentication</p>
-          
+
           <div class="checkbox-container">
             <label class="checkbox-label">
               <input type="checkbox" id="includePrivateRepos">
@@ -447,16 +446,16 @@
               </div>
             </label>
           </div>
-          
+
           <button id="oauthLogin" class="primary-btn" style="margin-top: 12px;">
             Sign in with GitHub
           </button>
           <div id="oauthStatus" class="status"></div>
         </div>
       </div>
-      
+
       <div class="divider">OR</div>
-      
+
       <div class="section">
         <div class="section-title">Personal Access Token</div>
         <p class="note">For advanced users: <a href="https://github.com/settings/tokens" target="_blank">Generate a token</a> with <code>repo</code> scope</p>
@@ -464,13 +463,13 @@
         <button id="save" class="primary-btn" style="margin-top: 12px;">Save token</button>
         <div id="tokenStatus" class="status"></div>
       </div>
-      
+
       <!-- Preview Settings Section -->
       <div style="font-weight: bold; font-size:16px; text-align: center; margin-bottom: 12px;">Personalization</div>
       <div class="section">
         <div class="section-title">Preview Settings</div>
         <p class="note" style="margin-bottom: 12px;">Customize what previews appear on hover</p>
-        
+
         <div class="setting-row">
           <div class="setting-info">
             <div class="setting-label">Image Previews</div>
@@ -481,7 +480,7 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        
+
         <div class="setting-row">
           <div class="setting-info">
             <div class="setting-label">Code Previews</div>
@@ -492,7 +491,7 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        
+
         <div class="setting-row">
           <div class="setting-info">
             <div class="setting-label">Folder Previews</div>
@@ -504,12 +503,12 @@
           </label>
         </div>
       </div>
-      
+
       <!-- Hover Behavior Section -->
       <div class="section">
         <div class="section-title">Hover Behavior</div>
         <p class="note" style="margin-bottom: 12px;">Control when and how previews appear</p>
-        
+
         <div class="setting-row">
           <div class="setting-info">
             <div class="setting-label">Preview Delay</div>
@@ -525,7 +524,7 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        
+
         <div class="setting-row">
           <div class="setting-info">
             <div class="setting-label">Require Modifier Key</div>

@@ -3,39 +3,43 @@
   "name": "Peek-a-Repo",
   "description": "Hover to preview files, folders, and images on GitHub. Fast and efficient with smart caching.",
   "version": "3.0.0",
-
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-
-  "permissions": ["storage", "identity"],
-
+  "permissions": [
+    "storage",
+    "identity"
+  ],
   "host_permissions": [
     "https://github.com/*",
     "https://raw.githubusercontent.com/*",
     "https://api.github.com/*"
   ],
-
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
-
   "content_scripts": [
     {
-      "matches": ["https://github.com/*"],
-      "js": ["prism/prism.js","content.js"],
-      "css": ["prism/prism.css","tailwind.css"],
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": [
+        "prism/prism.js",
+        "content.js"
+      ],
+      "css": [
+        "prism/prism.css",
+        "tailwind.css"
+      ],
       "run_at": "document_idle"
     }
   ],
-
-  "options_page": "options.html",
-  
   "action": {
-    "default_title": "Peek-a-Repo Settings"
+    "default_title": "Peek-a-Repo Settings",
+    "default_popup": "options.html"
   }
 }
