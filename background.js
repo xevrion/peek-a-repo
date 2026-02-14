@@ -1,5 +1,6 @@
+import { GITHUB_CLIENT_ID, GITHUB_AUTHORIZE_URL } from "./config.js";
+
 const GITHUB_API = "https://api.github.com/graphql";
-const GITHUB_CLIENT_ID = "Ov23li7jLGhcwdkrnVXS"; // Public client ID for OAuth
 
 // Open options page when extension icon is clicked
 chrome.action.onClicked.addListener(() => {
@@ -18,13 +19,16 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 // Handle OAuth flow
-async function initiateGitHubOAuth() {
+async function initiateGitHubOAuth(scopes = "read:user") {
   const redirectURL = chrome.identity.getRedirectURL();
-  const clientId = GITHUB_CLIENT_ID;
-  const scopes = "read:user";
-  
-  const authURL = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectURL)}&scope=${encodeURIComponent(scopes)}`;
-  
+
+  const url = new URL(GITHUB_AUTHORIZE_URL);
+  url.searchParams.set("client_id", GITHUB_CLIENT_ID);
+  url.searchParams.set("redirect_uri", redirectURL);
+  url.searchParams.set("scope", scopes);
+
+  const authURL = url.toString();
+
   return new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow(
       {
@@ -36,18 +40,18 @@ async function initiateGitHubOAuth() {
           reject(chrome.runtime.lastError);
           return;
         }
-        
+
         // Extract the code from the redirect URL
         const url = new URL(redirectUrl);
         const code = url.searchParams.get("code");
-        
+
         if (code) {
           try {
             // Exchange code for token using GitHub's device flow as a workaround
             // Since we can't directly exchange the code without a client secret in the extension
             // We'll use GitHub's token directly from the auth flow
             // Note: For production, you'd need a backend server to exchange the code
-            
+
             // For now, we'll use a proxy service or direct token method
             // This is a simplified version - you may need to set up a backend
             resolve({ code });
@@ -78,14 +82,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     fetchPage(msg).then(sendResponse);
     return true;
   }
-  
+
   if (msg.type === "OAUTH_LOGIN") {
-    initiateGitHubOAuth()
+    initiateGitHubOAuth(msg.scope)
       .then((result) => sendResponse({ success: true, ...result }))
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
   }
-  
+
   if (msg.type === "OPEN_OPTIONS") {
     chrome.runtime.openOptionsPage();
     sendResponse({ success: true });
@@ -135,14 +139,14 @@ async function fetchFile({ owner, repo, branch, path }) {
 
     if (json.errors) {
       // Check for rate limit in GraphQL errors
-      const rateLimitError = json.errors.find(e => 
-        e.message?.toLowerCase().includes('rate limit') || 
+      const rateLimitError = json.errors.find(e =>
+        e.message?.toLowerCase().includes('rate limit') ||
         e.type === 'RATE_LIMITED'
       );
       if (rateLimitError) {
         return { error: "RATE_LIMIT" };
       }
-      
+
       // Check for private repo access errors (NOT_FOUND usually means no permission)
       const privateRepoError = json.errors.find(e =>
         e.type === 'NOT_FOUND' ||
@@ -152,7 +156,7 @@ async function fetchFile({ owner, repo, branch, path }) {
       if (privateRepoError) {
         return { error: "PRIVATE_REPO_NO_ACCESS" };
       }
-      
+
       return { error: json.errors[0].message };
     }
 
@@ -215,14 +219,14 @@ async function fetchPage({ owner, repo, branch, path }) {
 
     if (json.errors) {
       // Check for rate limit in GraphQL errors
-      const rateLimitError = json.errors.find(e => 
-        e.message?.toLowerCase().includes('rate limit') || 
+      const rateLimitError = json.errors.find(e =>
+        e.message?.toLowerCase().includes('rate limit') ||
         e.type === 'RATE_LIMITED'
       );
       if (rateLimitError) {
         return { error: "RATE_LIMIT" };
       }
-      
+
       // Check for private repo access errors
       const privateRepoError = json.errors.find(e =>
         e.type === 'NOT_FOUND' ||
@@ -232,7 +236,7 @@ async function fetchPage({ owner, repo, branch, path }) {
       if (privateRepoError) {
         return { error: "PRIVATE_REPO_NO_ACCESS" };
       }
-      
+
       return { error: json.errors[0].message };
     }
 
@@ -300,8 +304,8 @@ async function fetchFolder({ owner, repo, branch, path }) {
 
     if (json.errors) {
       // Check for rate limit in GraphQL errors
-      const rateLimitError = json.errors.find(e => 
-        e.message?.toLowerCase().includes('rate limit') || 
+      const rateLimitError = json.errors.find(e =>
+        e.message?.toLowerCase().includes('rate limit') ||
         e.type === 'RATE_LIMITED'
       );
       if (rateLimitError) {
