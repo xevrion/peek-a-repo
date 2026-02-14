@@ -1,5 +1,4 @@
-const GITHUB_API = "https://api.github.com/graphql";
-const GITHUB_CLIENT_ID = "Ov23li7jLGhcwdkrnVXS"; // Public client ID for OAuth
+import { GITHUB_API, GITHUB_CLIENT_ID, GITHUB_AUTHORIZE_URL } from "./consts.js";
 
 // Open options page when extension icon is clicked
 chrome.action.onClicked.addListener(() => {
@@ -18,17 +17,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 // Handle OAuth flow
-async function initiateGitHubOAuth() {
+async function initiateGitHubOAuth(scopes = "read:user") {
   const redirectURL = chrome.identity.getRedirectURL();
   const clientId = GITHUB_CLIENT_ID;
-  const scopes = "read:user";
   
-  const authURL = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectURL)}&scope=${encodeURIComponent(scopes)}`;
+  const authURL = new URL(GITHUB_AUTHORIZE_URL)
+  authURL.searchParams.set("client_id", GITHUB_CLIENT_ID);
+  authURL.searchParams.set("redirect_uri", redirectURL);
+  authURL.searchParams.set("scope", scopes);
   
   return new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow(
       {
-        url: authURL,
+        url: authURL.toString(),
         interactive: true,
       },
       async (redirectUrl) => {
@@ -80,7 +81,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   
   if (msg.type === "OAUTH_LOGIN") {
-    initiateGitHubOAuth()
+    initiateGitHubOAuth(msg.scope)
       .then((result) => sendResponse({ success: true, ...result }))
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true;
