@@ -1,3 +1,5 @@
+import { GITHUB_CLIENT_ID, GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL, GITHUB_LOGIN_OAUTH_DEVICE_CODE_URL } from "./consts.js";
+
 const input = document.getElementById("token");
 const saveBtn = document.getElementById("save");
 const oauthLoginBtn = document.getElementById("oauthLogin");
@@ -142,14 +144,14 @@ oauthLoginBtn.addEventListener("click", async () => {
     // because we can't securely store client_secret in the extension
     
     // Step 1: Request device code
-    const deviceResponse = await fetch("https://github.com/login/device/code", {
+    const deviceResponse = await fetch(GITHUB_LOGIN_OAUTH_DEVICE_CODE_URL, {
       method: "POST",
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        client_id: "Ov23li7jLGhcwdkrnVXS",
+        client_id: GITHUB_CLIENT_ID,
         scope: scope,
       }),
     });
@@ -177,14 +179,14 @@ oauthLoginBtn.addEventListener("click", async () => {
         throw new Error("Authorization expired. Please try again.");
       }
 
-      const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
+      const tokenResponse = await fetch(GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL, {
         method: "POST",
         headers: {
           "Accept": "application/json",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          client_id: "Ov23li7jLGhcwdkrnVXS",
+          client_id: GITHUB_CLIENT_ID,
           device_code: deviceData.device_code,
           grant_type: "urn:ietf:params:oauth:grant-type:device_code",
         }),

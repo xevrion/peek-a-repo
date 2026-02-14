@@ -1,5 +1,4 @@
-const GITHUB_API = "https://api.github.com/graphql";
-const GITHUB_CLIENT_ID = "Ov23li7jLGhcwdkrnVXS"; // Public client ID for OAuth
+import { GITHUB_API, GITHUB_CLIENT_ID, GITHUB_AUTHORIZE_URL } from "./consts";
 
 // Open options page when extension icon is clicked
 chrome.action.onClicked.addListener(() => {
@@ -23,12 +22,15 @@ async function initiateGitHubOAuth() {
   const clientId = GITHUB_CLIENT_ID;
   const scopes = "read:user";
   
-  const authURL = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectURL)}&scope=${encodeURIComponent(scopes)}`;
+  const authURL = new URL(GITHUB_AUTHORIZE_URL)
+  url.searchParams.set("client_id", GITHUB_CLIENT_ID);
+  url.searchParams.set("redirect_uri", redirectURL);
+  url.searchParams.set("scope", scopes);
   
   return new Promise((resolve, reject) => {
     chrome.identity.launchWebAuthFlow(
       {
-        url: authURL,
+        url: authURL.toString(),
         interactive: true,
       },
       async (redirectUrl) => {
