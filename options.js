@@ -202,6 +202,10 @@ oauthLoginBtn.addEventListener("click", async () => {
 			},
 		});
 
+    // Copy code to clipboard and signal content script to show toast on the auth page
+    navigator.clipboard.writeText(deviceData.user_code).catch(() => {});
+    await chrome.storage.local.set({ copiedDeviceCode: deviceData.user_code });
+
     chrome.tabs.create({ url: deviceData.verification_uri });
 
 		oauthStatus.textContent = `Enter this code: ${deviceData.user_code}`;
