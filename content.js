@@ -296,7 +296,7 @@ function createPopup() {
     text-white text-xs
     shadow-2xl
     pointer-events-auto
-    overflow-auto
+    overflow-y-auto overflow-x-hidden
     opacity-0 scale-[0.98] translate-y-1
     transition-all duration-150 ease-out
   `;
@@ -339,6 +339,11 @@ function destroyPopup() {
 
   popup.classList.remove("opacity-100", "scale-100", "translate-y-0");
   popup.classList.add("opacity-0", "scale-[0.98]", "translate-y-1");
+
+  if (stickyScrollbarCleanup) {
+    stickyScrollbarCleanup();
+    stickyScrollbarCleanup = null;
+  }
 
   const el = popup;
   popup = null;
@@ -749,6 +754,70 @@ function reclampPopup() {
   });
 }
 
+let stickyScrollbarCleanup = null;
+
+function attachStickyScrollbar(containerEl, preEl) {
+  // Tear down any previous instance
+  if (stickyScrollbarCleanup) {
+    stickyScrollbarCleanup();
+    stickyScrollbarCleanup = null;
+  }
+
+  // Inject the webkit hide-scrollbar rule once
+  if (!document.getElementById('peek-pre-noscroll-style')) {
+    const style = document.createElement('style');
+    style.id = 'peek-pre-noscroll-style';
+    style.textContent = `.peek-pre-noscroll::-webkit-scrollbar { display: none; }`;
+    document.head.appendChild(style);
+  }
+
+  // Hide the native scrollbar on <pre> but keep it scrollable
+  preEl.classList.add('peek-pre-noscroll');
+  preEl.style.overflowX = 'auto';
+  preEl.style.scrollbarWidth = 'none';
+
+  // Build the sticky fake scrollbar
+  const bar = document.createElement('div');
+  bar.style.cssText = 'position:sticky;bottom:0;overflow-x:auto;overflow-y:hidden;height:14px;';
+  const inner = document.createElement('div');
+  inner.style.cssText = 'height:1px;';
+  bar.appendChild(inner);
+  containerEl.appendChild(bar);
+
+  function syncWidth() {
+    inner.style.width = preEl.scrollWidth + 'px';
+  }
+  syncWidth();
+
+  // Keep scrollbar width in sync if content changes (e.g. after "View more")
+  const observer = new ResizeObserver(syncWidth);
+  observer.observe(preEl);
+
+  // Bidirectional scroll sync
+  let syncing = false;
+  const onPreScroll = () => {
+    if (syncing) return;
+    syncing = true;
+    bar.scrollLeft = preEl.scrollLeft;
+    syncing = false;
+  };
+  const onBarScroll = () => {
+    if (syncing) return;
+    syncing = true;
+    preEl.scrollLeft = bar.scrollLeft;
+    syncing = false;
+  };
+  preEl.addEventListener('scroll', onPreScroll);
+  bar.addEventListener('scroll', onBarScroll);
+
+  stickyScrollbarCleanup = () => {
+    observer.disconnect();
+    preEl.removeEventListener('scroll', onPreScroll);
+    bar.removeEventListener('scroll', onBarScroll);
+    bar.remove();
+  };
+}
+
 function highlightCode(code) {
   return code
     .replace(/"(.*?)"/g, `<span class="str">"$1"</span>`)
@@ -1045,6 +1114,9 @@ async function handleHover(e, link) {
       Prism.highlightAllUnder(popup);
     }
 
+    const preEl = popup.querySelector('pre');
+    if (preEl) attachStickyScrollbar(popup.querySelector('.code-preview-container'), preEl);
+
     return;
   }
 
@@ -1208,6 +1280,9 @@ async function handleHover(e, link) {
   }
   
   Prism.highlightAllUnder(popup);
+
+  const preEl = popup.querySelector('pre');
+  if (preEl) attachStickyScrollbar(popup.querySelector('.code-preview-container'), preEl);
 }
 
 // mouse over
