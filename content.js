@@ -73,18 +73,22 @@ function expandTruncatedCode(containerElement, fullContent, language) {
   const preElement = containerElement.querySelector('pre');
   const codeElement = containerElement.querySelector('code');
   const truncatedMessage = containerElement.querySelector('.truncated-message');
-  
+
   if (preElement && codeElement) {
+    const savedScrollTop = popup ? popup.scrollTop : 0;
+
     codeElement.textContent = fullContent;
-    
-    // Re-apply Prism highlighting
+
     if (window.Prism) {
       Prism.highlightElement(codeElement);
     }
-    
-    // Remove the truncated message
+
     if (truncatedMessage) {
       truncatedMessage.remove();
+    }
+
+    if (popup) {
+      popup.scrollTop = savedScrollTop;
     }
   }
 }
