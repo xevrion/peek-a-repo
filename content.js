@@ -75,7 +75,9 @@ function expandTruncatedCode(containerElement, fullContent, language) {
   const truncatedMessage = containerElement.querySelector('.truncated-message');
 
   if (preElement && codeElement) {
-    const savedScrollTop = popup ? popup.scrollTop : 0;
+    // Scroll container is containerElement itself when flex mode is active, otherwise popup
+    const scrollEl = containerElement.style.overflowY === 'auto' ? containerElement : popup;
+    const savedScrollTop = scrollEl ? scrollEl.scrollTop : 0;
 
     codeElement.textContent = fullContent;
 
@@ -87,8 +89,8 @@ function expandTruncatedCode(containerElement, fullContent, language) {
       truncatedMessage.remove();
     }
 
-    if (popup) {
-      popup.scrollTop = savedScrollTop;
+    if (scrollEl) {
+      scrollEl.scrollTop = savedScrollTop;
     }
   }
 }
@@ -338,12 +340,17 @@ function createPopup() {
   popup.addEventListener("wheel", (e) => {
     e.preventDefault();
 
-    // Route horizontal delta to the <pre> element, vertical delta to the popup
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      // Horizontal: route to the <pre> element
       const preEl = popup.querySelector('pre');
       if (preEl) preEl.scrollLeft += e.deltaX;
     } else {
-      popup.scrollTop += e.deltaY;
+      // Vertical: route to containerEl when flex mode is active, otherwise popup itself
+      const codeContainer = popup.querySelector('.code-preview-container');
+      const scrollTarget = (codeContainer && codeContainer.style.overflowY === 'auto')
+        ? codeContainer
+        : popup;
+      scrollTarget.scrollTop += e.deltaY;
     }
   }, { passive: false });
 }
@@ -796,16 +803,24 @@ function attachStickyScrollbar(containerEl, preEl) {
   preEl.classList.add('peek-pre-noscroll');
   preEl.style.overflowX = 'auto';
   preEl.style.scrollbarWidth = 'none';
-  // Push code content up so the last line doesn't render behind the sticky scrollbar
-  preEl.style.paddingBottom = `${nativeScrollbarH}px`;
 
-  // Build the sticky fake scrollbar
+  // Restructure popup into a flex column so the bar lives OUTSIDE the scrollable area.
+  // This ensures code can never scroll behind the bar, on any scroll position.
+  popup.style.overflow = 'hidden';
+  popup.style.display = 'flex';
+  popup.style.flexDirection = 'column';
+  containerEl.style.flex = '1';
+  containerEl.style.minHeight = '0'; // required for flex children to shrink below content size
+  containerEl.style.overflowY = 'auto';
+  containerEl.style.overflowX = 'hidden';
+
+  // Bar appended directly to popup (not inside containerEl), so it's always below the code
   const bar = document.createElement('div');
-  bar.style.cssText = `position:sticky;bottom:0;overflow-x:auto;overflow-y:hidden;height:${nativeScrollbarH}px;background:rgba(20,20,30,1);border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0;`;
+  bar.style.cssText = `overflow-x:auto;overflow-y:hidden;height:${nativeScrollbarH}px;background:rgba(20,20,30,1);border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0;border-radius:0 0 12px 12px;`;
   const inner = document.createElement('div');
   inner.style.cssText = 'height:1px;';
   bar.appendChild(inner);
-  containerEl.appendChild(bar);
+  popup.appendChild(bar);
 
   function syncWidth() {
     inner.style.width = preEl.scrollWidth + 'px';
@@ -837,7 +852,6 @@ function attachStickyScrollbar(containerEl, preEl) {
     observer.disconnect();
     preEl.removeEventListener('scroll', onPreScroll);
     bar.removeEventListener('scroll', onBarScroll);
-    bar.remove();
   };
 }
 
