@@ -736,6 +736,19 @@ function positionPopup(e) {
   });
 }
 
+// Re-clamp popup horizontal position after content expands (e.g. after "View more")
+function reclampPopup() {
+  requestAnimationFrame(() => {
+    if (!popup) return;
+    const padding = 20;
+    const viewportWidth = window.innerWidth;
+    const rect = popup.getBoundingClientRect();
+    if (rect.right > viewportWidth - padding) {
+      popup.style.left = `${Math.max(padding, viewportWidth - popup.offsetWidth - padding)}px`;
+    }
+  });
+}
+
 function highlightCode(code) {
   return code
     .replace(/"(.*?)"/g, `<span class="str">"$1"</span>`)
@@ -1009,9 +1022,23 @@ async function handleHover(e, link) {
   if (cache.has(href) && !href.includes("/tree/")) {
     // Check if this request is still current
     if (requestId !== currentRequestId) return;
-    
-    popup.innerHTML = cache.get(href);
+
+    const cached = cache.get(href);
+    popup.innerHTML = cached.html;
     positionPopup(e);
+
+    // Re-attach "View more" listener — the HTML is cached but listeners are not
+    if (cached.truncated) {
+      const viewMoreBtn = popup.querySelector('.view-more-btn');
+      if (viewMoreBtn) {
+        viewMoreBtn.addEventListener('click', (evt) => {
+          evt.preventDefault();
+          evt.stopPropagation();
+          expandTruncatedCode(popup.querySelector('.code-preview-container'), cached.content, cached.language);
+          reclampPopup();
+        });
+      }
+    }
 
     if (window.Prism) {
       Prism.highlightAllUnder(popup);
@@ -1158,13 +1185,13 @@ async function handleHover(e, link) {
   </div>
 `;
 
-  cache.set(href, html);
-  
+  cache.set(href, { html, content: res.content, language, truncated });
+
   // Final check before updating DOM
   if (!popup || requestId !== currentRequestId) return;
-  
+
   popup.innerHTML = html;
-  
+
   // Add click handler for "View more" button if truncated
   if (truncated) {
     const viewMoreBtn = popup.querySelector('.view-more-btn');
@@ -1172,8 +1199,8 @@ async function handleHover(e, link) {
       viewMoreBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const container = popup.querySelector('.code-preview-container');
-        expandTruncatedCode(container, res.content, language);
+        expandTruncatedCode(popup.querySelector('.code-preview-container'), res.content, language);
+        reclampPopup();
       });
     }
   }
