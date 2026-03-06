@@ -870,7 +870,7 @@ function attachFolderPopupHandlers(popupElement, pageData, owner, repo, branch, 
   
   // Add hover handlers for files to show preview from cached data
   popupElement.querySelectorAll("[data-type='blob']").forEach((fileElement) => {
-    fileElement.addEventListener("mouseenter", (e) => {
+    fileElement.addEventListener("mouseenter", () => {
       const fileName = fileElement.getAttribute("data-file");
       const fileContent = pageData.files ? pageData.files[fileName] : null;
       const filePath = basePath ? `${basePath}/${fileName}` : fileName;
@@ -1034,6 +1034,7 @@ async function handleHover(e, link) {
         viewMoreBtn.addEventListener('click', (evt) => {
           evt.preventDefault();
           evt.stopPropagation();
+          popup.style.maxWidth = popup.offsetWidth + 'px';
           expandTruncatedCode(popup.querySelector('.code-preview-container'), cached.content, cached.language);
           reclampPopup();
         });
@@ -1199,6 +1200,7 @@ async function handleHover(e, link) {
       viewMoreBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        popup.style.maxWidth = popup.offsetWidth + 'px';
         expandTruncatedCode(popup.querySelector('.code-preview-container'), res.content, language);
         reclampPopup();
       });
