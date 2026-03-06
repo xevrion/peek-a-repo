@@ -785,19 +785,19 @@ function attachStickyScrollbar(containerEl, preEl) {
     document.head.appendChild(style);
   }
 
-  // Hide the native scrollbar on <pre> but keep it scrollable
-  preEl.classList.add('peek-pre-noscroll');
-  preEl.style.overflowX = 'auto';
-  preEl.style.scrollbarWidth = 'none';
-  // Push code content up so the last line doesn't render behind the sticky scrollbar
-  preEl.style.paddingBottom = `${nativeScrollbarH}px`;
-
   // Measure the native scrollbar height on this browser/OS
   const scrollbarProbe = document.createElement('div');
   scrollbarProbe.style.cssText = 'position:absolute;visibility:hidden;width:50px;overflow-x:scroll;';
   document.body.appendChild(scrollbarProbe);
   const nativeScrollbarH = Math.max(scrollbarProbe.offsetHeight, 12);
   scrollbarProbe.remove();
+
+  // Hide the native scrollbar on <pre> but keep it scrollable
+  preEl.classList.add('peek-pre-noscroll');
+  preEl.style.overflowX = 'auto';
+  preEl.style.scrollbarWidth = 'none';
+  // Push code content up so the last line doesn't render behind the sticky scrollbar
+  preEl.style.paddingBottom = `${nativeScrollbarH}px`;
 
   // Build the sticky fake scrollbar
   const bar = document.createElement('div');
