@@ -789,6 +789,8 @@ function attachStickyScrollbar(containerEl, preEl) {
   preEl.classList.add('peek-pre-noscroll');
   preEl.style.overflowX = 'auto';
   preEl.style.scrollbarWidth = 'none';
+  // Push code content up so the last line doesn't render behind the sticky scrollbar
+  preEl.style.paddingBottom = `${nativeScrollbarH}px`;
 
   // Measure the native scrollbar height on this browser/OS
   const scrollbarProbe = document.createElement('div');
