@@ -3,6 +3,8 @@
   "name": "Peek-a-Repo",
   "description": "Hover to preview files, folders, and images on GitHub. Fast and efficient with smart caching.",
   "version": "3.0.0",
+  "author": "Yash Bavadiya",
+  "homepage_url": "https://github.com/xevrion/peek-a-repo",
 
   "icons": {
     "16": "icons/icon16.png",

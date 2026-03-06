@@ -1210,7 +1210,7 @@ async function handleHover(e, link) {
     img.onload = () => {
       // Check if this request is still current before caching
       if (!popup || requestId !== currentRequestId) return;
-      cache.set(href, popup.innerHTML);
+      cache.set(href, { html: popup.innerHTML, truncated: false });
     };
     return;
   }
