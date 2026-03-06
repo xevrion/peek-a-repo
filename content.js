@@ -296,6 +296,37 @@ function unlockBodyScroll() {
   document.body.style.paddingRight = '';
 }
 
+// --- Momentum scroll engine for popup ---
+const _sv = { x: 0, y: 0 };   // velocities
+const _sel = { x: null, y: null }; // scroll targets
+let _sRaf = null;
+
+function _smoothStep() {
+  let alive = false;
+  for (const axis of ['y', 'x']) {
+    if (Math.abs(_sv[axis]) < 0.5) { _sv[axis] = 0; continue; }
+    const prop = axis === 'y' ? 'scrollTop' : 'scrollLeft';
+    if (_sel[axis]) _sel[axis][prop] += _sv[axis] * 0.12;
+    _sv[axis] *= 0.85;
+    alive = true;
+  }
+  _sRaf = alive ? requestAnimationFrame(_smoothStep) : null;
+}
+
+function popupSmoothScroll(el, axis, delta) {
+  _sel[axis] = el;
+  _sv[axis] += delta;
+  // Cap velocity so a fast spin doesn't overshoot wildly
+  _sv[axis] = Math.max(-800, Math.min(800, _sv[axis]));
+  if (!_sRaf) _sRaf = requestAnimationFrame(_smoothStep);
+}
+
+function cancelPopupScroll() {
+  _sv.x = 0; _sv.y = 0;
+  if (_sRaf) { cancelAnimationFrame(_sRaf); _sRaf = null; }
+}
+// --- end momentum scroll ---
+
 function createPopup() {
   popup = document.createElement("div");
 
@@ -340,17 +371,18 @@ function createPopup() {
   popup.addEventListener("wheel", (e) => {
     e.preventDefault();
 
+    // Normalize delta across deltaMode (pixels / lines / pages)
+    const scale = e.deltaMode === 1 ? 20 : e.deltaMode === 2 ? window.innerHeight : 1;
+
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-      // Horizontal: route to the <pre> element
       const preEl = popup.querySelector('pre');
-      if (preEl) preEl.scrollLeft += e.deltaX;
+      if (preEl) popupSmoothScroll(preEl, 'x', e.deltaX * scale);
     } else {
-      // Vertical: route to containerEl when flex mode is active, otherwise popup itself
       const codeContainer = popup.querySelector('.code-preview-container');
-      const scrollTarget = (codeContainer && codeContainer.style.overflowY === 'auto')
+      const scrollEl = (codeContainer && codeContainer.style.overflowY === 'auto')
         ? codeContainer
         : popup;
-      scrollTarget.scrollTop += e.deltaY;
+      popupSmoothScroll(scrollEl, 'y', e.deltaY * scale);
     }
   }, { passive: false });
 }
@@ -360,6 +392,8 @@ function destroyPopup() {
 
   popup.classList.remove("opacity-100", "scale-100", "translate-y-0");
   popup.classList.add("opacity-0", "scale-[0.98]", "translate-y-1");
+
+  cancelPopupScroll();
 
   if (stickyScrollbarCleanup) {
     stickyScrollbarCleanup();
