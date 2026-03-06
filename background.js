@@ -1,4 +1,97 @@
-import { GITHUB_API, GITHUB_CLIENT_ID, GITHUB_AUTHORIZE_URL } from "./consts.js";
+import { GITHUB_API, GITHUB_CLIENT_ID, GITHUB_AUTHORIZE_URL, GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL } from "./consts.js";
+
+// --- Device flow polling (runs in background so it survives popup close) ---
+
+let isPolling = false;
+
+async function pollForToken(deviceCode, pollInterval, expiresAt) {
+  isPolling = true;
+
+  if (Date.now() > expiresAt) {
+    await chrome.storage.sync.remove("deviceFlowState");
+    isPolling = false;
+    chrome.alarms.clear("deviceFlowWatchdog");
+    chrome.runtime.sendMessage({ type: "DEVICE_FLOW_EXPIRED" }).catch(() => {});
+    return;
+  }
+
+  try {
+    const tokenResponse = await fetch(GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: GITHUB_CLIENT_ID,
+        device_code: deviceCode,
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (tokenData.error === "authorization_pending") {
+      setTimeout(() => pollForToken(deviceCode, pollInterval, expiresAt), pollInterval);
+      return;
+    }
+
+    if (tokenData.error === "slow_down") {
+      const newInterval = pollInterval + 5000;
+      setTimeout(() => pollForToken(deviceCode, newInterval, expiresAt), newInterval);
+      return;
+    }
+
+    if (tokenData.error) {
+      await chrome.storage.sync.remove("deviceFlowState");
+      isPolling = false;
+      chrome.alarms.clear("deviceFlowWatchdog");
+      chrome.runtime.sendMessage({ type: "DEVICE_FLOW_ERROR", error: tokenData.error_description || tokenData.error }).catch(() => {});
+      return;
+    }
+
+    if (tokenData.access_token) {
+      await chrome.storage.sync.set({ githubToken: tokenData.access_token });
+      await chrome.storage.sync.remove("deviceFlowState");
+      isPolling = false;
+      chrome.alarms.clear("deviceFlowWatchdog");
+      chrome.runtime.sendMessage({ type: "LOGIN_COMPLETE" }).catch(() => {});
+    }
+  } catch (error) {
+    await chrome.storage.sync.remove("deviceFlowState");
+    isPolling = false;
+    chrome.alarms.clear("deviceFlowWatchdog");
+    chrome.runtime.sendMessage({ type: "DEVICE_FLOW_ERROR", error: error.message }).catch(() => {});
+  }
+}
+
+async function checkAndStartPolling() {
+  if (isPolling) return;
+
+  const { deviceFlowState } = await chrome.storage.sync.get("deviceFlowState");
+  if (!deviceFlowState) return;
+
+  if (Date.now() > deviceFlowState.expires_at) {
+    await chrome.storage.sync.remove("deviceFlowState");
+    return;
+  }
+
+  const pollInterval = (deviceFlowState.interval || 5) * 1000;
+  pollForToken(deviceFlowState.device_code, pollInterval, deviceFlowState.expires_at);
+
+  // Watchdog alarm: if service worker is killed and restarted, resume polling
+  chrome.alarms.create("deviceFlowWatchdog", { periodInMinutes: 0.5 });
+}
+
+// Resume any in-progress device flow when service worker starts
+checkAndStartPolling();
+
+// Watchdog: restart polling if service worker was terminated mid-poll
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "deviceFlowWatchdog") {
+    checkAndStartPolling();
+  }
+});
 
 // Open options page when extension icon is clicked
 chrome.action.onClicked.addListener(() => {
@@ -80,6 +173,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   
+  if (msg.type === "START_DEVICE_POLL") {
+    checkAndStartPolling()
+      .then(() => sendResponse({ success: true }))
+      .catch(() => sendResponse({ success: false }));
+    return true;
+  }
+
   if (msg.type === "OAUTH_LOGIN") {
     initiateGitHubOAuth(msg.scope)
       .then((result) => sendResponse({ success: true, ...result }))
