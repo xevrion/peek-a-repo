@@ -1,4 +1,4 @@
-import { GITHUB_CLIENT_ID, GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL, GITHUB_LOGIN_OAUTH_DEVICE_CODE_URL } from "./consts.js";
+import { GITHUB_CLIENT_ID, GITHUB_LOGIN_OAUTH_DEVICE_CODE_URL } from "./consts.js";
 
 const input = document.getElementById("token");
 const saveBtn = document.getElementById("save");
@@ -136,70 +136,7 @@ async function init() {
 
 init();
 
-async function pollForToken(deviceCode, pollInterval, expiresAt) {
-	if (Date.now() > expiresAt) {
-		await chrome.storage.sync.remove("deviceFlowState");
-		oauthStatus.textContent = "Authorization expired. Please try again.";
-		oauthStatus.classList.remove("success");
-		oauthStatus.classList.add("show", "error");
-		oauthLoginBtn.disabled = false;
-		oauthLoginBtn.textContent = "Sign in with GitHub";
-		return;
-	}
-
-	try {
-		const tokenResponse = await fetch(GITHUB_LOGIN_OAUTH_ACCESS_TOKEN_URL, {
-			method: "POST",
-			headers: {
-				"Accept": "application/json",
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				client_id: GITHUB_CLIENT_ID,
-				device_code: deviceCode,
-				grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-			}),
-		});
-
-		const tokenData = await tokenResponse.json();
-
-		if (tokenData.error === "authorization_pending") {
-			setTimeout(() => pollForToken(deviceCode, pollInterval, expiresAt), pollInterval);
-			return;
-		}
-
-		if (tokenData.error === "slow_down") {
-			setTimeout(() => pollForToken(deviceCode, pollInterval + 5000, expiresAt), pollInterval + 5000);
-			return;
-		}
-
-		if (tokenData.error) {
-			throw new Error(tokenData.error_description || tokenData.error);
-		}
-
-		if (tokenData.access_token) {
-			await chrome.storage.sync.set({ githubToken: tokenData.access_token });
-			await chrome.storage.sync.remove("deviceFlowState");
-
-			oauthStatus.textContent = "Successfully connected to GitHub!";
-			oauthStatus.classList.remove("error");
-			oauthStatus.classList.add("show", "success");
-
-			setTimeout(() => {
-				checkLoginStatus();
-				oauthLoginBtn.disabled = false;
-				oauthLoginBtn.textContent = "Sign in with GitHub";
-			}, 1500);
-		}
-	} catch (error) {
-		await chrome.storage.sync.remove("deviceFlowState");
-		oauthStatus.textContent = `Error: ${error.message}`;
-		oauthStatus.classList.remove("success");
-		oauthStatus.classList.add("show", "error");
-		oauthLoginBtn.disabled = false;
-		oauthLoginBtn.textContent = "Sign in with GitHub";
-	}
-}
+// Polling is handled by background.js so it continues even when the popup is closed
 
 async function restoreDeviceFlowState() {
 	const { deviceFlowState } = await chrome.storage.sync.get("deviceFlowState");
@@ -216,8 +153,8 @@ async function restoreDeviceFlowState() {
 	oauthLoginBtn.textContent = "Waiting for authorization...";
 	oauthLoginBtn.disabled = true;
 
-	const pollInterval = (deviceFlowState.interval || 5) * 1000;
-	pollForToken(deviceFlowState.device_code, pollInterval, deviceFlowState.expires_at);
+	// Tell background to poll (it may already be polling if it was running)
+	chrome.runtime.sendMessage({ type: "START_DEVICE_POLL" }).catch(() => {});
 }
 
 // OAuth Login
@@ -271,8 +208,8 @@ oauthLoginBtn.addEventListener("click", async () => {
 		oauthStatus.classList.add("show", "success");
 		oauthLoginBtn.textContent = "Waiting for authorization...";
 
-		const pollInterval = (deviceData.interval || 5) * 1000;
-		pollForToken(deviceData.device_code, pollInterval, expiresAt);
+		// Hand off polling to background so it continues even if this popup is closed
+		chrome.runtime.sendMessage({ type: "START_DEVICE_POLL" });
   } catch (error) {
     await chrome.storage.sync.remove("deviceFlowState");
     oauthStatus.textContent = `Error: ${error.message}`;
@@ -412,6 +349,52 @@ function handleRecordKeyUp(e) {
     stopRecording();
   }
 }
+
+// Listen for login results sent by background.js polling
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "LOGIN_COMPLETE") {
+    oauthStatus.textContent = "Successfully connected to GitHub!";
+    oauthStatus.classList.remove("error");
+    oauthStatus.classList.add("show", "success");
+    setTimeout(() => {
+      checkLoginStatus();
+      oauthLoginBtn.disabled = false;
+      oauthLoginBtn.textContent = "Sign in with GitHub";
+    }, 1500);
+  }
+
+  if (msg.type === "DEVICE_FLOW_EXPIRED") {
+    oauthStatus.textContent = "Authorization expired. Please try again.";
+    oauthStatus.classList.remove("success");
+    oauthStatus.classList.add("show", "error");
+    oauthLoginBtn.disabled = false;
+    oauthLoginBtn.textContent = "Sign in with GitHub";
+  }
+
+  if (msg.type === "DEVICE_FLOW_ERROR") {
+    oauthStatus.textContent = `Error: ${msg.error}`;
+    oauthStatus.classList.remove("success");
+    oauthStatus.classList.add("show", "error");
+    oauthLoginBtn.disabled = false;
+    oauthLoginBtn.textContent = "Sign in with GitHub";
+  }
+});
+
+// Handle login completing while popup was closed — detect token being set in storage
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync") return;
+
+  if (changes.githubToken?.newValue && oauthLoginBtn.disabled) {
+    oauthStatus.textContent = "Successfully connected to GitHub!";
+    oauthStatus.classList.remove("error");
+    oauthStatus.classList.add("show", "success");
+    setTimeout(() => {
+      checkLoginStatus();
+      oauthLoginBtn.disabled = false;
+      oauthLoginBtn.textContent = "Sign in with GitHub";
+    }, 1500);
+  }
+});
 
 // Disable or enable all controls except the record button so that user can't interact with them while recording
 function disableAllControls(disable) {
