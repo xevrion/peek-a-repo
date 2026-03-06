@@ -1115,7 +1115,6 @@ async function handleHover(e, link) {
           evt.stopPropagation();
           popup.style.maxWidth = popup.offsetWidth + 'px';
           expandTruncatedCode(popup.querySelector('.code-preview-container'), cached.content, cached.language);
-          reclampPopup();
         });
       }
     }
@@ -1284,7 +1283,6 @@ async function handleHover(e, link) {
         e.stopPropagation();
         popup.style.maxWidth = popup.offsetWidth + 'px';
         expandTruncatedCode(popup.querySelector('.code-preview-container'), res.content, language);
-        reclampPopup();
       });
     }
   }
