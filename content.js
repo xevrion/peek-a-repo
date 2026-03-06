@@ -786,9 +786,16 @@ function attachStickyScrollbar(containerEl, preEl) {
   preEl.style.overflowX = 'auto';
   preEl.style.scrollbarWidth = 'none';
 
+  // Measure the native scrollbar height on this browser/OS
+  const scrollbarProbe = document.createElement('div');
+  scrollbarProbe.style.cssText = 'position:absolute;visibility:hidden;width:50px;overflow-x:scroll;';
+  document.body.appendChild(scrollbarProbe);
+  const nativeScrollbarH = Math.max(scrollbarProbe.offsetHeight, 12);
+  scrollbarProbe.remove();
+
   // Build the sticky fake scrollbar
   const bar = document.createElement('div');
-  bar.style.cssText = 'position:sticky;bottom:0;overflow-x:auto;overflow-y:hidden;height:14px;';
+  bar.style.cssText = `position:sticky;bottom:0;overflow-x:auto;overflow-y:hidden;height:${nativeScrollbarH}px;background:rgba(20,20,30,1);border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0;`;
   const inner = document.createElement('div');
   inner.style.cssText = 'height:1px;';
   bar.appendChild(inner);
