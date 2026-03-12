@@ -4,6 +4,10 @@ Peek inside GitHub files and folders **without clicking**.
 
 A small Chrome extension born out of pure developer frustration.
 
+<p align="center">
+  <img src="screenshots/readme-pic.webp" alt="Peek-a-Repo preview" />
+</p>
+
 **[Install from the Chrome Web Store](https://chrome.google.com/webstore/detail/peek-a-repo/aanpngikpldepannbdkglfohenbkhomp)**
 
 ---
@@ -47,6 +51,7 @@ and instantly see what's inside?
 - No losing context
 
 Inspired by Wikipedia-style hover popups, Peek-a-Repo lets you _peek_ inside files before opening them.
+Worth reading the [Wikipedia article](https://wikimediafoundation.org/news/2018/04/20/why-it-took-a-long-time-to-build-that-tiny-link-preview-on-wikipedia/) where they explain why it took so long to build that tiny link preview on Wikipedia. It's cool to see how much effort went into making that tiny link preview on Wikipedia.
 
 ---
 
@@ -124,7 +129,9 @@ Peek-a-Repo does not collect any user data. Your GitHub token is stored locally 
 
 ## Contributing
 
-Contributions are welcome! Feel free to open issues or pull requests.
+Contributions are welcome!
+Feel free to open issues or pull requests.
+Read the [contributing guide](CONTRIBUTING.md) for more details.
 
 ---
 
